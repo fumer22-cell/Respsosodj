@@ -87,12 +87,16 @@ export const CONFIG = {
       handbrakeGrip: 0.32,    // rear lateral grip while the handbrake is held (not a full lock)
       handbrakeDrag: 0.18,    // rear braking (fraction of grip) while the handbrake is held
       driftGrip: 0.62,        // rear lateral grip once sliding with throttle (keeps drifts going)
-      driftAngle: 0.18,       // rad of body slip that counts as "drifting"
+      driftAngle: 0.18,       // rad of body slip; a handbrake drift ends when slip drops below half this
       driftBoost: 2600,       // N of push along the direction of travel while drifting on throttle
       driftSteerYaw: 3.0,     // 1/s^2: how strongly the car turns toward the drift angle your steering asks for
       maxDriftAngle: 0.95,    // rad; beyond this the car is pulled back so it doesn't spin
       antiSpin: 7,            // strength of that pull (1/s)
-      straightDamping: 2.2,   // extra yaw damping when not drifting (stable at speed)
+      straightDamping: 5,     // 1/s: outside a drift, how quickly yaw follows the steering
+      slipDamping: 2.5,       // 1/s: outside a drift, how quickly sideways slip is scrubbed off
+      gripG: 1.25,            // max cornering g outside a drift (times surface grip)
+      tractionLimit: 0.72,    // outside a drift, rear drive force is capped at this share of grip
+      gripCountersteer: 0.15, // counter-steer assist outside a drift (the drift value is countersteerAssist)
       launchBoost: 1.35,      // torque multiplier in 1st/2nd gear for punchy launches
     },
 
@@ -148,12 +152,14 @@ export const CONFIG = {
     //   drag sideways      -> steering
     // Distances are fractions of the screen's shorter side, divided by the
     // sensitivity setting.
-    fullDrag: 0.26,        // pull-back distance for full brake
+    fullDrag: 0.42,        // pull-back distance for full brake
     steerFullDrag: 0.22,   // sideways distance for full lock
     deadZone: 0.06,        // default dead zone (fraction of fullDrag), user adjustable
-    throttleCut: 0.32,     // pull-back (fraction of fullDrag, past the dead zone) where throttle reaches 0
-    brakeStart: 0.04,      // pull-back where braking begins
-    brakeCurve: 1.3,       // >1 = gentler light braking, sharper at the end
+    // Pull-back map (fractions of fullDrag, measured past the dead zone):
+    throttleHold: 0.2,     // throttle stays at 100% until here (small wobbles don't matter)
+    throttleCut: 0.55,     // ...then eases off, reaching 0 here
+    brakeStart: 0.35,      // braking starts here and reaches 100% at 1.0
+    brakeCurve: 1.4,       // >1 = gentler light braking, sharper at the end
     steerCurve: 1.3,       // >1 = finer control near centre
     // String "tension": steering follows the finger through a spring-damper
     steerSpring: 110,      // stiffness
@@ -171,7 +177,7 @@ export const CONFIG = {
     voice: true,
     sound: true,
     quality: 'psx',        // chunky (180p) | psx (240p) | sharp (360p) | native
-    handbrakeSide: 'right',
+    handbrakeSide: 'left',  // small (P) button, halfway up the screen edge
     units: 'kmh',
     fullscreen: true,
   },

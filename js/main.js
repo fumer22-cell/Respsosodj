@@ -28,6 +28,8 @@ const tryInput = new StringInput($('#try-pad'), overlay);
 const audio = new GameAudio();
 let settings = storage.loadSettings();
 if (!(settings.quality in CONFIG.render.lines) && settings.quality !== 'native') settings.quality = 'psx';
+// v3 moved the handbrake to a small button on the left edge; reset the old side choice once.
+if ((settings.layout || 0) < 3) { settings.handbrakeSide = 'left'; settings.layout = 3; }
 
 const G = {
   mode: 'menu',            // menu | countdown | racing | finished | results
@@ -65,7 +67,7 @@ function resize() {
   renderer.setSize(renderW, renderH, false);
   setPsxResolution(renderW, renderH, !!lines);
   document.body.classList.toggle('no-retro', !lines);
-  document.body.classList.toggle('hb-left', settings.handbrakeSide === 'left');
+  document.body.classList.toggle('hb-right', settings.handbrakeSide === 'right');
   if (G.world) G.world.resize(w, h);
 }
 window.addEventListener('resize', resize);

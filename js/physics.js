@@ -144,7 +144,15 @@ export class Car {
     // when the car is sliding (beta = body slip angle). Makes drifts catchable
     // on a touch screen while leaving the car free to slide.
     const beta = u > 2 ? Math.atan2(v, u) : 0;
-    const assist = p.countersteerAssist * clamp(beta, -0.7, 0.7);
+    // Arcade: a drift is "latched" by the handbrake and ends once the car
+    // straightens up. Outside a drift the car grips, so steering is direct.
+    const arcP = p.arcade && p.arcade.enabled ? p.arcade : null;
+    if (arcP) {
+      if (input.handbrake && speed > 6) this.driftLatch = true;
+      else if (this.driftLatch && (speed < 5 || (!input.handbrake && Math.abs(beta) < arcP.driftAngle * 0.5))) this.driftLatch = false;
+    }
+    const assistGain = arcP && !this.driftLatch ? arcP.gripCountersteer : p.countersteerAssist;
+    const assist = assistGain * clamp(beta, -0.7, 0.7);
     const target = clamp(clamp(input.steer, -1, 1) * maxSteer + assist, -p.maxSteerLow, p.maxSteerLow);
     const rate = 5.0 * dt;                     // rad per step the wheels can turn
     this.steer += clamp(target - this.steer, -rate, rate);
@@ -222,7 +230,7 @@ export class Car {
     const handbrake = !!input.handbrake;
     // Arcade: are we drifting? (body slip beyond a threshold at speed)
     // (hysteresis: once drifting, stay drifting down to a smaller angle)
-    const drifting = !!arc && speed > 6 && u > 0 && Math.abs(beta) > arc.driftAngle * (this.fx.drifting ? 0.55 : 1);
+    const drifting = !!arc && this.driftLatch && speed > 6 && u > 0;
 
     // Contact-patch velocities in each wheel's own frame
     const cd = Math.cos(delta), sd = Math.sin(delta);
@@ -264,6 +272,9 @@ export class Car {
     } else {
       FxR = driveForce * (1 - frontShare) + engineBrake * (1 - frontShare)
         + brakeFn(1 - p.brakeBias, vrwx) + rollFn(Fzr, sr, vrwx);
+      // Arcade traction control: outside a drift, never spin the rear tyres
+      // hard enough to lose the back end (keeps full throttle safe).
+      if (arc && !drifting && FxR > capR * arc.tractionLimit) FxR = capR * arc.tractionLimit;
       if (Math.abs(FxR) > capR) { FxR = Math.sign(FxR) * capR * p.spinGrip; rearSlipping = true; }
       FyR = -capR * pacejka(slipR, p.rear.B * sr.bScale, p.rear.C * sr.cScale, p.rear.E);
       // Arcade: once sliding on throttle, the rear stays loose so drifts hold
@@ -302,10 +313,16 @@ export class Car {
         // ...but the car never rotates past maxDriftAngle into a spin.
         const over = beta - clamp(beta, -arc.maxDriftAngle, arc.maxDriftAngle);
         this.w += over * arc.antiSpin * dt;
-      } else if (!handbrake && speed > 3 && Math.abs(beta) < arc.driftAngle * 0.7) {
-        // Gripping: pull yaw toward what the front wheels ask for (planted, responsive).
-        const wGeo = u * Math.tan(delta) / this.L;
+      } else if (!handbrake && speed > 3 && u > 0) {
+        // Gripping: yaw follows what the front wheels ask for (limited by
+        // grip), and sideways slip is scrubbed off: planted and direct.
+        const wMax = arc.gripG * 9.81 * sf.grip / Math.max(speed, 1);
+        const wGeo = clamp(u * Math.tan(delta) / this.L, -wMax, wMax);
         this.w -= (this.w - wGeo) * Math.min(1, arc.straightDamping * dt);
+        const uu = this.vx * ch + this.vy * sh;
+        let vv = -this.vx * sh + this.vy * ch;
+        vv *= 1 - Math.min(1, arc.slipDamping * dt);
+        this.vx = uu * ch - vv * sh; this.vy = uu * sh + vv * ch;
       }
     }
 
@@ -340,7 +357,7 @@ export class Car {
     fx.spinning = rearSlipping && !handbrake && Math.abs(driveForce) > 0;
     fx.locked = (frontSlipping && brake > 0.2) || handbrake;
     fx.handbrake = handbrake;
-    fx.drifting = drifting;
+    fx.drifting = drifting && Math.abs(beta) > (arc ? arc.driftAngle * 0.6 : 0);
     fx.beta = beta;
     fx.wheelOmega = (fx.spinning ? Math.abs(u) + 8 : u) / p.wheelRadius;
     this.rpmShown = lerp(this.rpmShown, fx.spinning ? Math.min(p.redline, rpm + 1800) : rpm, Math.min(1, dt * 12));

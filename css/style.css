@@ -64,26 +64,25 @@ button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 }
 .hud-seed { font-size: 12px; color: var(--muted); margin-top: 4px; }
 
-/* Tach + speed, bottom-left (swaps with the handbrake side) */
+/* Tach + speed, bottom-left */
 .hud-bl { position: absolute; left: calc(10px + var(--safe-l)); bottom: calc(10px + var(--safe-b)); width: 118px; height: 118px; }
-body.hb-left .hud-bl { left: auto; right: calc(10px + var(--safe-r)); }
 #hud-tach { width: 118px; height: 118px; image-rendering: pixelated; position: absolute; inset: 0; }
 .speedo { position: absolute; left: 0; right: 0; top: 44px; text-align: center; line-height: 1; }
 .speedo span { font-family: var(--display); font-style: italic; font-size: 30px; font-variant-numeric: tabular-nums; }
 .speedo small { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
 .gear { position: absolute; right: 4px; bottom: 2px; font-family: var(--display); font-size: 22px; color: var(--amber); font-style: italic; }
 
-/* Handbrake: its own button, independent of the string */
+/* Handbrake: a small parking-brake icon, halfway up the left edge */
 .hb-btn {
-  position: absolute; right: calc(14px + var(--safe-r)); bottom: calc(22px + var(--safe-b));
-  width: 92px; height: 92px; pointer-events: auto; touch-action: none;
-  border: 3px solid #ff4a4a; background: rgba(90, 8, 16, .55); color: #ffd0d0;
-  font-family: var(--display); font-size: 13px; line-height: 1.1; letter-spacing: 1px; font-style: italic;
-  clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
+  position: absolute; left: calc(8px + var(--safe-l)); top: 50%; transform: translateY(-50%);
+  width: 58px; height: 58px; padding: 9px; pointer-events: auto; touch-action: none;
+  border: 2px solid rgba(255,74,74,.85); background: rgba(40, 6, 12, .55); color: #ff8080;
+  border-radius: 50%;
   -webkit-user-select: none; user-select: none;
 }
-.hb-btn.down { background: #ff2a3a; color: #fff; transform: scale(.94); }
-body.hb-left .hb-btn { right: auto; left: calc(14px + var(--safe-l)); }
+.hb-btn svg { width: 100%; height: 100%; display: block; }
+.hb-btn.down { background: #ff2a3a; color: #fff; border-color: #fff; transform: translateY(-50%) scale(.92); }
+body.hb-right .hb-btn { left: auto; right: calc(8px + var(--safe-r)); }
 
 /* Drift combo */
 .hud-drift {
@@ -240,7 +239,7 @@ h2 {
   .note-arrow, .note-grade { font-size: 26px; }
   .hud-bl, #hud-tach { width: 100px; height: 100px; }
   .speedo { top: 36px; } .speedo span { font-size: 24px; }
-  .hb-btn { width: 80px; height: 80px; bottom: calc(14px + var(--safe-b)); }
+  .hb-btn { width: 52px; height: 52px; }
 }
 @media (orientation: landscape) and (max-height: 480px) {
   .title-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; align-items: center; width: min(100%, 720px); }

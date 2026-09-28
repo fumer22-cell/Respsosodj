@@ -45,13 +45,18 @@
     </div>
     <div id="hud-drift" class="hud-drift hidden"><b id="drift-pts">0</b><small id="drift-label">DRIFT</small></div>
     <div id="hud-drift-total" class="hud-drift-total"></div>
-    <button id="btn-hb" class="hb-btn" aria-label="Handbrake"><span>HAND<br>BRAKE</span></button>
+    <button id="btn-hb" class="hb-btn" aria-label="Handbrake">
+      <!-- dashboard parking-brake symbol: (P) -->
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="8.5" fill="none" stroke="currentColor" stroke-width="2.4"/>
+        <path d="M13.4 20.5v-9h3.4a2.7 2.7 0 0 1 0 5.4h-3.4" fill="none" stroke="currentColor" stroke-width="2.2"/>
+        <path d="M6.2 9.5a12 12 0 0 0 0 13M25.8 9.5a12 12 0 0 1 0 13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+    </button>
     <div id="hud-center" class="hud-center"></div>
     <div id="hud-warn" class="hud-warn hidden"></div>
     <div id="hud-hint" class="hud-hint hidden">
       <b>Touch anywhere &amp; hold</b> = full throttle.<br>
       Pull <b>back</b> to ease off and brake · drag <b>sideways</b> to steer<br>
-      Hit <b>HANDBRAKE</b> to throw it into a drift
+      Tap the <b>(P)</b> handbrake on the left edge to drift
     </div>
   </div>
 
@@ -160,7 +165,7 @@
       <label class="set check"><input id="s-sound" type="checkbox"> Engine sound</label>
       <label class="set check"><input id="s-fs" type="checkbox"> Go fullscreen when racing</label>
       <label class="set">Handbrake button
-        <select id="s-hbside"><option value="right">Right side</option><option value="left">Left side</option></select></label>
+        <select id="s-hbside"><option value="left">Left edge</option><option value="right">Right edge</option></select></label>
       <label class="set">Retro resolution
         <select id="s-quality"><option value="chunky">Chunky (180p)</option><option value="psx">PS1 (240p)</option><option value="sharp">Sharp (360p)</option><option value="native">Off (full res)</option></select></label>
       <label class="set">Units
@@ -178,10 +183,10 @@
       <h2>How to drive</h2>
       <p>Imagine an <b>invisible string</b> tied to your car. Touch <b>anywhere</b> and keep your finger down: that spot is where you grabbed it, and you're instantly on <b>full throttle</b>.</p>
       <ul>
-        <li><b>Pull back a little</b>: lift off the throttle and brake lightly.</li>
+        <li><b>Pull back</b>: small wobbles are ignored; further back lifts off the throttle, then brakes.</li>
         <li><b>Pull back hard</b>: hard braking. Keep holding at a standstill to reverse.</li>
         <li><b>Drag left / right</b>: steer. Further means more lock.</li>
-        <li><b>HANDBRAKE</b> button (second thumb): kick the tail out. While drifting, your steering sets the drift angle and throttle keeps it going.</li>
+        <li><b>(P) handbrake</b> (small button halfway up the left edge, second thumb): kick the tail out. While drifting, your steering sets the drift angle and throttle keeps it going.</li>
         <li><b>Let go</b>: coast.</li>
       </ul>
       <p>Drifting scores points. Hold a slide to build a combo; hitting something loses it.</p>

@@ -3,11 +3,13 @@
 //
 //  Touch anywhere: that point becomes the ANCHOR and you're instantly on
 //  full throttle. From the anchor:
-//    pull back a little -> throttle eases off and light braking starts
+//    small wobbles      -> ignored, you stay on full throttle
+//    pull back further  -> throttle eases off, then braking builds up
 //    pull back hard     -> hard braking; hold it at a standstill -> reverse
+//    left of the anchor -> turn left, right of it -> turn right
 //    drag sideways      -> steering (spring-smoothed, like tension on a string)
 //    release            -> coast, steering springs back to centre
-//  The handbrake is its own on-screen button (a separate finger), so it can
+//  The handbrake is a small on-screen button (a separate finger), so it can
 //  be used at any time, independent of the string.
 //
 //  Keyboard (arrows/WASD + space) also works for desktop testing.
@@ -118,8 +120,8 @@ export class StringInput {
       const dz = clamp(this.settings.deadZone, 0, 0.5);
       // Pull-back amount past the dead zone (0 = at or above the anchor)
       const pull = Math.max(0, (p.y - p.ay) / full - dz);
-      thrT = 1 - clamp(pull / c.throttleCut, 0, 1);
-      brkT = Math.pow(clamp((pull - c.brakeStart) / (1 - dz - c.brakeStart), 0, 1), c.brakeCurve);
+      thrT = 1 - clamp((pull - c.throttleHold) / (c.throttleCut - c.throttleHold), 0, 1);
+      brkT = Math.pow(clamp((pull - c.brakeStart) / (1 - c.brakeStart), 0, 1), c.brakeCurve);
       // Steering with a small dead zone and a gentle curve
       const sx = Math.abs(p.x - p.ax) / sFull;
       const sdz = dz * 0.5;
@@ -184,9 +186,9 @@ export class StringInput {
     // Neon colours: cyan = throttle, magenta->red = braking
     const col = this.brake > 0.05 ? (this.brake > 0.5 ? [255, 60, 60] : [255, 60, 200]) : [40, 240, 255];
     const px = Math.round;   // keep it crisp and pixel-y
-    // Brake zone guide: a short tick below the anchor where braking begins
+    // Brake guide: a short tick below the anchor where braking begins
     ctx.fillStyle = 'rgba(255,255,255,0.25)';
-    const by = p.ay + (this.settings.deadZone + c.throttleCut) * full;
+    const by = p.ay + (this.settings.deadZone + c.brakeStart) * full;
     ctx.fillRect(px(p.ax - 10), px(by), 20, 2);
     // The string: sags when slack, straight when taut
     const sag = (1 - tension) * Math.min(40, dist * 0.35);

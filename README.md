@@ -1,15 +1,19 @@
 # String Rally: Midnight Touge Edition
 
 An arcade mountain-pass racer for phones, in the style of an early-2000s / PS1 driving game
-(HTML5 + JavaScript + Three.js). You steer with an **invisible string**, and the handbrake has its
-own button.
+(HTML5 + JavaScript + Three.js). You steer with an **invisible string**, and the handbrake is a
+small button of its own.
 
 - **Touch anywhere**: that point becomes the anchor, and you're on full throttle straight away.
-- **Pull back a little**: the throttle eases off and light braking starts.
+- **Pull back**: small wobbles are ignored. Pulling further back lifts off the throttle, then
+  braking builds up.
 - **Pull back hard**: hard braking. Keep holding at a standstill to reverse.
-- **Drag left/right**: steer. Steering is spring-smoothed, like tension on a string.
-- **HANDBRAKE button** (second thumb): kicks the tail out. While drifting, your steering sets the
-  drift angle and throttle holds it. The button can go on either side (Settings).
+- **Left or right of the anchor**: turn left or right. The further out, the more lock. Steering is
+  spring-smoothed, like tension on a string.
+- **(P) handbrake**: a small button halfway up the left edge, for your second thumb. It's the only
+  way to start a drift; otherwise the car grips and goes where you steer. While drifting, your
+  steering sets the drift angle and the throttle holds it. The button can move to the right edge
+  (Settings).
 - **Let go**: coast.
 
 Drifting scores points, and holding a slide builds a multiplier. The keyboard also works: arrows or
@@ -109,14 +113,14 @@ tools/            Node checks: physics sanity + stage generation/drivability wit
 
 Every tuning value is in `js/config.js`, and each one is commented. Some examples:
 
-- **Arcade feel**: `carBase.arcade` (handbrake grip, drift grip/boost, how steering sets the drift
-  angle, anti-spin, launch boost). Set `arcade.enabled: false` for the plain simulation.
+- **Arcade feel**: `carBase.arcade` (grip-mode cornering `gripG`, traction control, handbrake
+  grip, drift grip/boost, how steering sets the drift angle, anti-spin, launch boost). Set `arcade.enabled: false` for the plain simulation.
 - **Car feel**: `carBase.front/rear` (Pacejka B/C/E), `tyreMu`, `countersteerAssist`,
   `cgToFront/cgToRear/cgHeight` (weight transfer), `torqueCurve`, `gears`, `topSpeed`.
 - **Surfaces**: `surfaces.*.grip` and `bScale/cScale`. Loose surfaces have a broad tyre peak, so
   drifts are progressive.
-- **Controls**: `controls.fullDrag` (pull-back for full brake), `throttleCut` (how soon pulling back
-  lifts the throttle), `brakeCurve`, `steerSpring/steerDamping` (string tension).
+- **Controls**: `controls.fullDrag` (pull-back for full brake), `throttleHold` / `throttleCut` /
+  `brakeStart` (the pull-back map), `brakeCurve`, `steerSpring/steerDamping` (string tension).
 - **Look**: `render.lines` (internal resolution), `snapDivisor` (wobble), `colorLevels`, `affine`,
   `render.skies` (night/dusk palettes), `stage.themes` (lamps, guardrails, surfaces).
 - **Stages**: `difficulty.*` (length, corner radius scale, hairpin/chicane frequency, width,
