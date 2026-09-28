@@ -144,7 +144,7 @@ export class UI {
     $('#res-record').classList.toggle('hidden', !r.record);
     $('#res-sub').textContent = r.sub;
     $('#res-seed').textContent = r.code;
-    $('#btn-copy').textContent = navigator.share ? 'Share' : 'Copy';
+    $('#btn-copy').textContent = 'Copy';
     const tbl = $('#res-splits');
     tbl.innerHTML = '';
     for (const row of r.rows) {

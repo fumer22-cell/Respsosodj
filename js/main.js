@@ -450,10 +450,9 @@ $('#btn-menu').addEventListener('click', toMenu);
 $('#btn-copy').addEventListener('click', async () => {
   const code = stageCode();
   const text = `Beat my ${formatTime(G.finalTime)} on String Rally stage ${code}!`;
-  try {
-    if (navigator.share) await navigator.share({ text });
-    else { await navigator.clipboard.writeText(code); $('#btn-copy').textContent = 'Copied'; }
-  } catch (_) { /* cancelled */ }
+  // Clipboard first (works in embedded viewers); Web Share as a fallback.
+  try { await navigator.clipboard.writeText(text); $('#btn-copy').textContent = 'Copied'; return; } catch (_) { /* try share */ }
+  try { if (navigator.share) await navigator.share({ text }); } catch (_) { /* cancelled or blocked */ }
 });
 
 // Settings screen
