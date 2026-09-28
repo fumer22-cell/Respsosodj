@@ -3,6 +3,7 @@
 // =============================================================================
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
+import { psx } from './psx.js';
 
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
@@ -43,9 +44,11 @@ export class Particles {
       fragmentShader: `
         varying vec3 vColor; varying float vAlpha;
         void main() {
-          float d = length(gl_PointCoord - 0.5);
-          if (d > 0.5 || vAlpha <= 0.0) discard;
-          gl_FragColor = vec4(vColor, vAlpha * smoothstep(0.5, 0.1, d));
+          // Chunky PS1 sprite: 4x4 blocky disc with stepped alpha
+          vec2 q = floor(gl_PointCoord * 4.0) / 3.0 - 0.5;
+          float d = length(q);
+          if (d > 0.62 || vAlpha <= 0.0) discard;
+          gl_FragColor = vec4(vColor, vAlpha * (d < 0.35 ? 1.0 : 0.55));
         }`,
       transparent: true, depthWrite: false,
     });
@@ -106,10 +109,10 @@ export class TireMarks {
     g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
     g.setAttribute('color', new THREE.BufferAttribute(this.col, 4).setUsage(THREE.DynamicDrawUsage));
     g.setIndex(new THREE.BufferAttribute(idx, 1));
-    this.mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({
+    this.mesh = new THREE.Mesh(g, psx(new THREE.MeshBasicMaterial({
       vertexColors: true, transparent: true, depthWrite: false,
       polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: THREE.DoubleSide,
-    }));
+    })));
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 2;
     scene.add(this.mesh);
@@ -216,7 +219,7 @@ export class EffectsDirector {
     }
     // Impact puff
     if (fx.impact > 2.5) {
-      const c = fx.impactKind === 'hay' ? 0xe0c870 : fx.impactKind === 'tree' ? 0x6b8a3a : 0xaaaaaa;
+      const c = fx.impactKind === 'tires' ? 0x303030 : fx.impactKind === 'tree' ? 0x6b8a3a : 0xaaaaaa;
       for (let i = 0; i < Math.min(18, fx.impact * 2); i++) {
         this.particles.emit(car.x + ch * 1.8, 0.6, car.y + sh * 1.8, (Math.random() - 0.5) * 6, Math.random() * 3, (Math.random() - 0.5) * 6, c, 0.5, 0.8, 1.2, 3, 0.8);
       }

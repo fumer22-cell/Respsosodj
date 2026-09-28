@@ -8,12 +8,12 @@ import { fileURLToPath } from 'url';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 // Dependency order
-const modules = ['config', 'rng', 'pacenotes', 'stage', 'physics', 'input', 'scene', 'effects', 'audio', 'ui', 'main'];
+const modules = ['config', 'rng', 'psx', 'pacenotes', 'stage', 'physics', 'input', 'scene', 'effects', 'audio', 'ui', 'main'];
 
 let js = `import * as THREE from '${THREE_URL}';\n`;
 for (const m of modules) {
   let src = fs.readFileSync(path.join(root, 'js', m + '.js'), 'utf8');
-  src = src.replace(/^import .*;\s*$/gm, '');
+  src = src.replace(/^import[\s\S]*?from\s+['"][^'"]+['"];[ \t]*$/gm, '');   // handles multi-line imports
   const exported = [];
   src = src.replace(/^export (async function|function|class|const|let) (\w+)/gm, (_, kind, name) => { exported.push(name); return `${kind} ${name}`; });
   // Each module gets its own scope so private helpers (clamp, lerp, ...) can't collide.
@@ -24,7 +24,9 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'css', 'style.css'), 'utf8');
 const body = html.slice(html.indexOf('<body>') + 6, html.indexOf('</body>'))
   .replace(/<script type="module" src="js\/main.js"><\/script>/, '');
-const out = `<title>String Rally</title>\n<style>\n${css}\n</style>\n${body}\n<script type="module">\n${js}\n</script>\n`;
+const head = html.slice(html.indexOf('<head>'), html.indexOf('</head>'));
+const fontLinks = head.split('\n').filter((l) => /fonts\.(googleapis|gstatic)\.com/.test(l)).map((l) => l.trim()).join('\n');
+const out = `<title>String Rally</title>\n${fontLinks}\n<style>\n${css}\n</style>\n${body}\n<script type="module">\n${js}\n</script>\n`;
 const dest = process.argv[2] || path.join(root, 'dist', 'string-rally.html');
 fs.mkdirSync(path.dirname(dest), { recursive: true });
 fs.writeFileSync(dest, out);

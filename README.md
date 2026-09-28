@@ -1,18 +1,42 @@
-# String Rally
+# String Rally: Midnight Touge Edition
 
-A mobile rally driving game in the browser (HTML5 + JavaScript + Three.js). You drive with an
-**invisible string**: touch anywhere, keep your finger down, and pull. There are no on-screen
-driving buttons.
+An arcade mountain-pass racer for phones, in the style of an early-2000s / PS1 driving game
+(HTML5 + JavaScript + Three.js). You steer with an **invisible string**, and the handbrake has its
+own button.
 
-- **Drag up**: throttle (the further you drag, the more throttle)
-- **Drag down**: brake. Hold it at a standstill to reverse.
-- **Drag left/right**: steer. Steering is spring-smoothed so it feels like tension on a string.
-- **Quick flick**, or **spin your finger in a circle**: handbrake, to start a drift
-- **Sharp downward flick**: emergency brake
-- **Let go**: coast. The car idles forward slowly and the steering returns to centre.
+- **Touch anywhere**: that point becomes the anchor, and you're on full throttle straight away.
+- **Pull back a little**: the throttle eases off and light braking starts.
+- **Pull back hard**: hard braking. Keep holding at a standstill to reverse.
+- **Drag left/right**: steer. Steering is spring-smoothed, like tension on a string.
+- **HANDBRAKE button** (second thumb): kicks the tail out. While drifting, your steering sets the
+  drift angle and throttle holds it. The button can go on either side (Settings).
+- **Let go**: coast.
 
-A faint line is drawn from where you touched down to your finger. Its colour and thickness show
-the tension. On desktop, the arrow keys or WASD with Space also work, which helps with testing.
+Drifting scores points, and holding a slide builds a multiplier. The keyboard also works: arrows or
+WASD to drive, Space for the handbrake.
+
+### The retro look
+
+There are no downloaded assets. Everything is built in code, partly because the Claude Artifact
+viewer can't load files from other hosts, and partly because that's how the look is made:
+
+- **Low resolution:** the scene renders at about 240 lines and is upscaled with hard pixels. This
+  is also why it runs well on phones.
+- **Vertex snapping:** vertices snap to a coarse screen grid, which gives the PS1 "wobble".
+- **Affine textures:** textures warp and swim the way they did on the PS1.
+- **15-bit colour:** colours are reduced and smoothed with a 4×4 ordered dither.
+- **Tiny textures:** 32–64px pixel-art textures (road atlas, livery, skyline, banners) are drawn in
+  code with nearest filtering.
+- **Night lighting:** street lamps are "baked" into the road and ground colours, the headlights
+  project a beam on the road, the car has neon underglow, and a city skyline sits on the horizon.
+
+The cars are built from extruded side profiles:
+
+- **RWD "Kestrel"**: a pop-up-headlight coupe.
+- **AWD "Raijin"**: a turbo sedan with a big wing.
+
+All of this lives in `js/psx.js` (shader patch and textures) and `js/scene.js`. The retro
+resolution can be changed or switched off in Settings.
 
 ## Run it locally
 
@@ -50,7 +74,7 @@ Tips:
 
 ## Game flow
 
-Title → pick a car (RWD "Kestrel" or AWD "Tundra") → pick a difficulty → **Random stage** or
+Title → pick a car (RWD "Kestrel" or AWD "Raijin") → pick a difficulty → **Random stage** or
 enter a seed → race → results, with your time, checkpoint splits and your best time on that seed.
 The results screen has **Next stage** and **Retry** buttons.
 
@@ -67,7 +91,8 @@ js/config.js      ALL tuning constants in one CONFIG object (physics, tyres, sur
                   controls, camera, stage generation, difficulty, rules, rendering)
 js/physics.js     2D vehicle model: Pacejka tyres, friction circle, weight transfer,
                   engine/gearbox, handbrake, surfaces, collisions (fixed 120 Hz step)
-js/input.js       "invisible string" touch controls + gestures + string overlay
+js/input.js       "invisible string" touch controls, handbrake button, string overlay
+js/psx.js         PS1 look: vertex snap, affine textures, dither; pixel textures made in code
 js/stage.js       seeded stage generator (non-crossing spline road, surfaces, width,
                   checkpoints, props/colliders) + fast road queries
 js/pacenotes.js   corner detection from curvature, grading (1–6, hairpin), modifiers,
@@ -84,12 +109,16 @@ tools/            Node checks: physics sanity + stage generation/drivability wit
 
 Every tuning value is in `js/config.js`, and each one is commented. Some examples:
 
+- **Arcade feel**: `carBase.arcade` (handbrake grip, drift grip/boost, how steering sets the drift
+  angle, anti-spin, launch boost). Set `arcade.enabled: false` for the plain simulation.
 - **Car feel**: `carBase.front/rear` (Pacejka B/C/E), `tyreMu`, `countersteerAssist`,
   `cgToFront/cgToRear/cgHeight` (weight transfer), `torqueCurve`, `gears`, `topSpeed`.
 - **Surfaces**: `surfaces.*.grip` and `bScale/cScale`. Loose surfaces have a broad tyre peak, so
   drifts are progressive.
-- **Controls**: `controls.fullDrag` (how far to drag for full input), `steerSpring/steerDamping`
-  (string tension), `flickSpeed`, `spinTurns`.
+- **Controls**: `controls.fullDrag` (pull-back for full brake), `throttleCut` (how soon pulling back
+  lifts the throttle), `brakeCurve`, `steerSpring/steerDamping` (string tension).
+- **Look**: `render.lines` (internal resolution), `snapDivisor` (wobble), `colorLevels`, `affine`,
+  `render.skies` (night/dusk palettes), `stage.themes` (lamps, guardrails, surfaces).
 - **Stages**: `difficulty.*` (length, corner radius scale, hairpin/chicane frequency, width,
   hazard density) and `stage.clearance` (the minimum distance between different parts of the
   road).
@@ -101,6 +130,11 @@ itself:
 ```js
 rally.autopilot = (await import('/tools/autopilot.js')).autopilot
 ```
+
+## Single-file build
+
+`node tools/build-single.mjs` bundles everything into `dist/string-rally.html`. Three.js still loads
+from the CDN. This is the version published as a Claude Artifact.
 
 ## Checks
 

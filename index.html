@@ -8,6 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#11161d">
   <title>String Rally</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Share+Tech+Mono&display=swap">
   <link rel="stylesheet" href="css/style.css">
   <script type="importmap">
     { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
@@ -16,6 +19,7 @@
 <body>
   <!-- 3D view + the string overlay. #touch receives all driving touches. -->
   <canvas id="gl"></canvas>
+  <div id="scanlines"></div>
   <canvas id="string"></canvas>
   <div id="touch"></div>
 
@@ -35,15 +39,19 @@
       <div id="hud-seed" class="hud-seed"></div>
     </div>
     <div class="hud-bl">
+      <canvas id="hud-tach" width="128" height="128"></canvas>
       <div class="speedo"><span id="hud-speed">0</span><small id="hud-unit">km/h</small></div>
-      <div class="gearline"><span id="hud-gear" class="gear">1</span><div class="rpm"><div id="hud-rpm"></div></div></div>
+      <div id="hud-gear" class="gear">1</div>
     </div>
+    <div id="hud-drift" class="hud-drift hidden"><b id="drift-pts">0</b><small id="drift-label">DRIFT</small></div>
+    <div id="hud-drift-total" class="hud-drift-total"></div>
+    <button id="btn-hb" class="hb-btn" aria-label="Handbrake"><span>HAND<br>BRAKE</span></button>
     <div id="hud-center" class="hud-center"></div>
     <div id="hud-warn" class="hud-warn hidden"></div>
     <div id="hud-hint" class="hud-hint hidden">
-      <b>Touch anywhere &amp; hold</b> — you're holding a string tied to the car.<br>
-      Drag <b>up</b> to go · <b>down</b> to brake · <b>sideways</b> to steer<br>
-      <b>Flick</b> for handbrake · <b>sharp flick down</b> = emergency brake
+      <b>Touch anywhere &amp; hold</b> = full throttle.<br>
+      Pull <b>back</b> to ease off and brake · drag <b>sideways</b> to steer<br>
+      Hit <b>HANDBRAKE</b> to throw it into a drift
     </div>
   </div>
 
@@ -51,7 +59,7 @@
   <section id="screen-title" class="screen">
     <div class="panel title-panel">
       <h1 class="logo">STRING<span>RALLY</span></h1>
-      <p class="tag">Drive with an invisible string. No buttons. Just pull.</p>
+      <p class="tag">MIDNIGHT TOUGE EDITION</p>
       <button class="btn primary big" data-go="car">Play</button>
       <div class="row">
         <button class="btn" data-go="help">How to drive</button>
@@ -65,16 +73,16 @@
       <h2>Choose your car</h2>
       <div class="cards">
         <button class="card" data-car="rwd">
-          <div class="swatch" style="background:#d8342c"></div>
+          <div class="swatch" style="background:linear-gradient(180deg,#f2f2ee 55%,#151518 55%)"></div>
           <h3>RWD “Kestrel”</h3>
-          <p>Rear-wheel drive. Tail-happy and playful — powers into big drifts. Rewards a light throttle.</p>
-          <div class="stats"><span>Grip ●●○○</span><span>Drift ●●●●</span><span>Traction ●●○○</span></div>
+          <p>Light rear-drive coupe with pop-up lights. Slides on command and holds a drift forever.</p>
+          <div class="stats"><span>GRIP ■■□□</span><span>DRIFT ■■■■</span><span>LAUNCH ■■□□</span></div>
         </button>
         <button class="card" data-car="awd">
-          <div class="swatch" style="background:#2a62d8"></div>
-          <h3>AWD “Tundra”</h3>
-          <p>All-wheel drive. Planted, fast out of corners, forgiving on loose surfaces.</p>
-          <div class="stats"><span>Grip ●●●●</span><span>Drift ●●○○</span><span>Traction ●●●●</span></div>
+          <div class="swatch" style="background:linear-gradient(90deg,#1d4fd0 70%,#ffd23a 70%)"></div>
+          <h3>AWD “Raijin”</h3>
+          <p>Turbo all-wheel-drive sedan with a big wing. Planted, brutal out of corners, easy on gravel.</p>
+          <div class="stats"><span>GRIP ■■■■</span><span>DRIFT ■■□□</span><span>LAUNCH ■■■■</span></div>
         </button>
       </div>
       <button class="btn ghost" data-go="title">Back</button>
@@ -86,8 +94,8 @@
       <h2>Difficulty</h2>
       <div class="stack">
         <button class="btn diff" data-diff="easy"><b>Easy</b><small>Wide roads, open corners, few hazards</small></button>
-        <button class="btn diff" data-diff="normal"><b>Normal</b><small>A proper rally stage</small></button>
-        <button class="btn diff" data-diff="hard"><b>Hard</b><small>Narrow, tight hairpins, trees everywhere</small></button>
+        <button class="btn diff" data-diff="normal"><b>Normal</b><small>A proper mountain pass</small></button>
+        <button class="btn diff" data-diff="hard"><b>Hard</b><small>Narrow, tight hairpins, walls everywhere</small></button>
       </div>
       <button class="btn ghost" data-go="car">Back</button>
     </div>
@@ -143,7 +151,7 @@
   <section id="screen-settings" class="screen hidden">
     <div class="panel scroll">
       <h2>Settings</h2>
-      <label class="set">Steering / pedal sensitivity <output id="o-sens"></output>
+      <label class="set">String sensitivity <output id="o-sens"></output>
         <input id="s-sens" type="range" min="0.5" max="2" step="0.05"></label>
       <label class="set">Dead zone <output id="o-dz"></output>
         <input id="s-dz" type="range" min="0" max="0.3" step="0.01"></label>
@@ -151,12 +159,14 @@
       <label class="set check"><input id="s-voice" type="checkbox"> Co-driver voice (speech)</label>
       <label class="set check"><input id="s-sound" type="checkbox"> Engine sound</label>
       <label class="set check"><input id="s-fs" type="checkbox"> Go fullscreen when racing</label>
-      <label class="set">Graphics
-        <select id="s-quality"><option value="auto">Auto</option><option value="low">Low (fastest)</option><option value="high">High</option></select></label>
+      <label class="set">Handbrake button
+        <select id="s-hbside"><option value="right">Right side</option><option value="left">Left side</option></select></label>
+      <label class="set">Retro resolution
+        <select id="s-quality"><option value="chunky">Chunky (180p)</option><option value="psx">PS1 (240p)</option><option value="sharp">Sharp (360p)</option><option value="native">Off (full res)</option></select></label>
       <label class="set">Units
         <select id="s-units"><option value="kmh">km/h</option><option value="mph">mph</option></select></label>
       <div class="try">
-        <div class="small muted">Try the string here:</div>
+        <div class="small muted">Try the string here (touch = full throttle, pull back = brake):</div>
         <div id="try-pad" class="try-pad"><div id="try-readout">touch &amp; drag</div></div>
       </div>
       <button id="btn-settings-done" class="btn primary">Done</button>
@@ -166,17 +176,16 @@
   <section id="screen-help" class="screen hidden">
     <div class="panel scroll help">
       <h2>How to drive</h2>
-      <p>Imagine an <b>invisible string</b> tied to the back of your car. Touch <b>anywhere</b> — that spot is where you grabbed it. Keep your finger down and pull:</p>
+      <p>Imagine an <b>invisible string</b> tied to your car. Touch <b>anywhere</b> and keep your finger down: that spot is where you grabbed it, and you're instantly on <b>full throttle</b>.</p>
       <ul>
-        <li><b>Up</b> — throttle. Further = more.</li>
-        <li><b>Down</b> — brake. Hold it at a standstill to reverse.</li>
-        <li><b>Left / right</b> — steer. Further = more lock.</li>
-        <li><b>Quick flick</b> (or spin your finger in a circle) — handbrake, to kick the car into a drift.</li>
-        <li><b>Sharp flick down</b> — emergency brake.</li>
-        <li><b>Let go</b> — coast. The car idles forward slowly.</li>
+        <li><b>Pull back a little</b>: lift off the throttle and brake lightly.</li>
+        <li><b>Pull back hard</b>: hard braking. Keep holding at a standstill to reverse.</li>
+        <li><b>Drag left / right</b>: steer. Further means more lock.</li>
+        <li><b>HANDBRAKE</b> button (second thumb): kick the tail out. While drifting, your steering sets the drift angle and throttle keeps it going.</li>
+        <li><b>Let go</b>: coast.</li>
       </ul>
-      <p>Listen to your co-driver: “<b>Left 3, long, don't cut</b>” means a medium left-hander that goes on a while with rocks on the inside. <b>1</b> is slowest, <b>6</b> is nearly flat out; <b>HP</b> is a hairpin.</p>
-      <p>Stay on the road: more than a few seconds off it and you're put back at the last checkpoint with a time penalty.</p>
+      <p>Drifting scores points. Hold a slide to build a combo; hitting something loses it.</p>
+      <p>The co-driver calls corners: “<b>Left 3, long, don't cut</b>”. <b>1</b> is slowest, <b>6</b> is nearly flat out, <b>HP</b> is a hairpin. More than a few seconds off the road puts you back at the last checkpoint with a time penalty.</p>
       <button class="btn primary" data-go="back">Got it</button>
     </div>
   </section>

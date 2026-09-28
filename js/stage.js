@@ -446,12 +446,14 @@ export class Stage {
   }
 
   // ---------------------------------------------------------------------------
-  // Props: trees, rocks, fences, spectators, hay bales (+ their colliders)
+  // Props: trees, rocks, guardrails, lamps, reflector posts, spectators,
+  // tyre stacks, vending machines (+ their colliders)
   // ---------------------------------------------------------------------------
   _placeProps(diff, rng) {
     const sc = CONFIG.stage;
     const verge = sc.vergeWidth;
-    const P = this.props = { trees: [], rocks: [], hay: [], fencePosts: [], fenceRails: [], spectators: [], gates: [] };
+    const P = this.props = { trees: [], rocks: [], tires: [], fencePosts: [], fenceRails: [], spectators: [], gates: [],
+      lamps: [], posts: [], vending: [] };
     const C = this.colliders = { circles: [], segments: [] };
     const hz = diff.hazard, gap = diff.hazardGap;
     const snowy = !!this.theme.snowy;
@@ -504,43 +506,42 @@ export class Stage {
       }
     }
 
-    // Corner furniture: fences + spectators on the outside, hay bales at tight
-    // apexes, and "don't cut" rocks on the inside of some corners.
+    // Corner furniture: guardrails + spectators on the outside, tyre stacks at
+    // tight apexes, and "don't cut" rocks on the inside of some corners.
     for (const c of this.corners) {
       const outSide = -c.dir;                   // right turn -> outside is left
       const apex = c.apex;
-      if (c.grade <= 4 && rng.chance(0.55)) {
-        // Fence line along the outside
-        const i0 = Math.max(0, c.start - 4), i1 = Math.min(this.count - 1, c.end + 8);
+      if (c.grade <= 5 && rng.chance(this.theme.guardrail ?? 0.55)) {
+        // Guardrail along the outside, right at the edge of the verge
+        const i0 = Math.max(0, c.start - 8), i1 = Math.min(this.count - 1, c.end + 12);
         let prev = null;
         for (let i = i0; i <= i1; i += 2) {
           if (nearGate(i)) { prev = null; continue; }
-          const off = this.hw[i] + verge + 2.2 + 1.2 * gap;
+          const off = this.hw[i] + verge + 0.5;
           const [x, y] = at(i, outSide, off);
-          if (!free(x, y, verge + 1.5)) { prev = null; continue; }
+          if (!free(x, y, verge + 0.4)) { prev = null; continue; }
           P.fencePosts.push({ x, y });
           if (prev) {
-            const col = ((i >> 1) & 1) ? 0xd92b2b : 0xf2f2f2;
-            P.fenceRails.push({ x1: prev[0], y1: prev[1], x2: x, y2: y, color: col });
-            C.segments.push({ x1: prev[0], y1: prev[1], x2: x, y2: y, e: 0.2, mu: 0.25, kind: 'fence' });
+            P.fenceRails.push({ x1: prev[0], y1: prev[1], x2: x, y2: y, color: 0xd6dbe0 });
+            C.segments.push({ x1: prev[0], y1: prev[1], x2: x, y2: y, e: 0.15, mu: 0.12, kind: 'rail' });
           }
           prev = [x, y];
-          // Spectators behind the fence
-          if (rng.chance(0.28)) {
-            const [sx, sy] = at(i, outSide, off + rng.range(2.5, 7), rng.range(-1, 1));
-            if (free(sx, sy, verge + 4)) P.spectators.push({ x: sx, y: sy, rot: this.heading[i] + (outSide > 0 ? -Math.PI / 2 : Math.PI / 2), color: rng.int(0, 7), phase: rng.range(0, TAU) });
+          // The gallery: spectators watching behind the rail
+          if (rng.chance(0.12)) {
+            const [sx, sy] = at(i, outSide, off + rng.range(2.5, 6), rng.range(-1, 1));
+            if (free(sx, sy, verge + 3)) P.spectators.push({ x: sx, y: sy, rot: this.heading[i] + (outSide > 0 ? -Math.PI / 2 : Math.PI / 2), color: rng.int(0, 7), phase: rng.range(0, TAU) });
           }
         }
       }
       if ((c.grade <= 2 || c.hairpin) && rng.chance(0.75)) {
-        // Hay bales on the outside of the apex
-        for (let a = -12; a <= 12; a += 1.6) {
+        // Tyre stacks on the outside of the apex
+        for (let a = -12; a <= 12; a += 1.5) {
           const i = clamp(apex + Math.round(a / this.ds), 0, this.count - 1);
           const off = this.hw[i] + verge + 1.1;
           const [x, y] = at(i, outSide, off);
           if (!free(x, y, verge + 0.5)) continue;
-          P.hay.push({ x, y, rot: this.heading[i] });
-          C.circles.push({ x, y, r: 0.7, e: 0.08, mu: 0.15, kind: 'hay' });
+          P.tires.push({ x, y, rot: this.heading[i], h: rng.int(2, 4) });
+          C.circles.push({ x, y, r: 0.65, e: 0.1, mu: 0.15, kind: 'tires' });
         }
       }
       if (c.grade >= 2 && c.grade <= 4 && !c.hairpin && rng.chance(0.4 * Math.min(1.3, hz))) {
@@ -569,6 +570,35 @@ export class Stage {
           const [x, y] = at(i, side, this.hw[i] + verge + rng.range(3.5, 7.5));
           if (free(x, y, verge + 3)) P.spectators.push({ x, y, rot: this.heading[i] + (side > 0 ? -Math.PI / 2 : Math.PI / 2), color: rng.int(0, 7), phase: rng.range(0, TAU) });
         }
+      }
+    }
+
+    // Street lamps (sodium), roughly every 50 m, alternating sides
+    let lampSide = rng.sign();
+    for (let i = 10; i < this.count - 5; i += 25) {
+      if (!rng.chance(this.theme.lamps ?? 0)) continue;
+      lampSide = -lampSide;
+      const j = i + rng.int(-3, 3);
+      const [x, y] = at(j, lampSide, this.hw[j] + verge + 0.9);
+      if (!free(x, y, verge + 0.7)) continue;
+      P.lamps.push({ x, y, i: j, side: lampSide, heading: this.heading[j] });
+      C.circles.push({ x, y, r: 0.22, e: 0.2, mu: 0.2, kind: 'pole' });
+    }
+    // Reflector posts along both edges (visual only)
+    for (let i = 6; i < this.count - 2; i += 12) {
+      for (const side of [-1, 1]) {
+        const [x, y] = at(i, side, this.hw[i] + verge * 0.6);
+        if (free(x, y, verge * 0.5)) P.posts.push({ x, y });
+      }
+    }
+    // Vending machines glowing by the start line
+    for (let k = 0; k < 3; k++) {
+      const i = clamp(this.startLineIndex - 8 + k, 0, this.count - 1);
+      const side = rng.chance(0.5) ? 1 : -1;
+      const [x, y] = at(i, side, this.hw[i] + verge + 3 + rng.range(0, 1));
+      if (free(x, y, verge + 2)) {
+        P.vending.push({ x, y, rot: this.heading[i] + (side > 0 ? -Math.PI / 2 : Math.PI / 2), color: rng.pick([0xe8e8f0, 0xd83030, 0x2f6fe0]) });
+        C.circles.push({ x, y, r: 0.6, e: 0.2, mu: 0.3, kind: 'box' });
       }
     }
 

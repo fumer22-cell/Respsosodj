@@ -46,7 +46,8 @@ export class UI {
     this.history = [];
     this.h = {
       hud: $('#hud'), time: $('#hud-time'), split: $('#hud-split'), cp: $('#hud-cp'), seed: $('#hud-seed'),
-      speed: $('#hud-speed'), unit: $('#hud-unit'), gear: $('#hud-gear'), rpm: $('#hud-rpm'),
+      speed: $('#hud-speed'), unit: $('#hud-unit'), gear: $('#hud-gear'), tach: $('#hud-tach'),
+      drift: $('#hud-drift'), driftPts: $('#drift-pts'), driftLabel: $('#drift-label'), driftTotal: $('#hud-drift-total'),
       note: $('#hud-note'), noteArrow: $('#note-arrow'), noteGrade: $('#note-grade'), noteText: $('#note-text'),
       center: $('#hud-center'), warn: $('#hud-warn'), hint: $('#hud-hint'),
     };
@@ -84,8 +85,42 @@ export class UI {
     this._set('gear', h.gear, gear);
     this._set('cp', h.cp, cpText);
     this._set('seed', h.seed, seedText);
-    const w = `${Math.round(rpmFrac * 100)}%`;
-    if (this._last.rpm !== w) { this._last.rpm = w; h.rpm.style.width = w; }
+    const r = Math.round(rpmFrac * 60);
+    if (this._last.rpm !== r) { this._last.rpm = r; this._drawTach(r / 60); }
+  }
+
+  /** Retro analog tach: 3/4 arc of LED segments, redline in red. */
+  _drawTach(frac) {
+    const cv = this.h.tach, ctx = cv.getContext('2d');
+    const W = cv.width, cx = W / 2, cy = W / 2;
+    ctx.clearRect(0, 0, W, W);
+    ctx.fillStyle = 'rgba(7,6,13,0.65)';
+    ctx.beginPath(); ctx.arc(cx, cy, W / 2 - 2, 0, Math.PI * 2); ctx.fill();
+    const N = 24, a0 = Math.PI * 0.75, a1 = Math.PI * 2.25;
+    for (let i = 0; i < N; i++) {
+      const t = i / (N - 1);
+      const a = a0 + (a1 - a0) * t;
+      const lit = t <= frac + 0.001;
+      ctx.strokeStyle = !lit ? 'rgba(255,255,255,0.12)' : t > 0.85 ? '#ff4a4a' : t > 0.65 ? '#ffb048' : '#19e6ff';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a) * (W / 2 - 16), cy + Math.sin(a) * (W / 2 - 16));
+      ctx.lineTo(cx + Math.cos(a) * (W / 2 - 6), cy + Math.sin(a) * (W / 2 - 6));
+      ctx.stroke();
+    }
+  }
+
+  /** Drift combo readout. state: 'live' | 'banked' | 'lost' | null */
+  drift(points, mult, state, total) {
+    const h = this.h;
+    if (!state) { h.drift.classList.add('hidden'); } else {
+      h.drift.classList.remove('hidden');
+      h.drift.classList.toggle('banked', state === 'banked');
+      h.drift.classList.toggle('lost', state === 'lost');
+      this._set('dpts', h.driftPts, state === 'lost' ? 'CRASH' : String(Math.round(points)));
+      this._set('dlbl', h.driftLabel, state === 'banked' ? `+${Math.round(points)} BANKED` : state === 'lost' ? 'COMBO LOST' : `DRIFT x${mult}`);
+    }
+    this._set('dtot', h.driftTotal, total > 0 ? `DRIFT ${Math.round(total)}` : '');
   }
 
   tick(dt) {
@@ -152,6 +187,7 @@ export class UI {
       const a = document.createElement('td'); a.textContent = row.label;
       const b = document.createElement('td'); b.textContent = row.time;
       const c = document.createElement('td'); c.textContent = row.delta || ''; c.className = row.cls || '';
+      if (row.cls === 'drift') { a.className = b.className = 'drift'; }
       tr.append(a, b, c); tbl.append(tr);
     }
     this.show('results');

@@ -12,6 +12,7 @@ import { PaceNoteCaller } from './pacenotes.js';
 import { GameAudio } from './audio.js';
 import { UI, storage, formatTime, formatDelta } from './ui.js';
 import { randomSeed, sanitizeSeed } from './rng.js';
+import { setPsxResolution } from './psx.js';
 
 window.__rallyBooted = true;
 const $ = (s) => document.querySelector(s);
@@ -22,10 +23,11 @@ const canvas = $('#gl');
 const overlay = $('#string');
 const renderer = createRenderer(canvas);
 const ui = new UI();
-const input = new StringInput($('#touch'), overlay);
+const input = new StringInput($('#touch'), overlay, $('#btn-hb'));
 const tryInput = new StringInput($('#try-pad'), overlay);
 const audio = new GameAudio();
 let settings = storage.loadSettings();
+if (!(settings.quality in CONFIG.render.lines) && settings.quality !== 'native') settings.quality = 'psx';
 
 const G = {
   mode: 'menu',            // menu | countdown | racing | finished | results
@@ -35,44 +37,40 @@ const G = {
   raceTime: 0, penalties: 0, penaltyCount: 0, splits: [], cpNext: 0,
   offroad: 0, wrongWay: 0, countdown: 0, shownCount: 0, finishTimer: 0, acc: 0,
   best: null, builtKey: null,
+  drift: null,
 };
-const HOLD_START = { throttle: 0, brake: 1, steer: 0, handbrake: false, emergency: false, hold: true };
-const HOLD_FINISH = { throttle: 0, brake: 0.45, steer: 0, handbrake: false, emergency: false, hold: true };
+const newDrift = () => ({ combo: 0, dur: 0, grace: 0, total: 0, state: null, show: 0, shown: 0 });
+G.drift = newDrift();
+const HOLD_START = { throttle: 0, brake: 1, steer: 0, handbrake: false, hold: true };
+const HOLD_FINISH = { throttle: 0, brake: 0.45, steer: 0, handbrake: false, hold: true };
 
 const stageCode = () => `${CONFIG.difficulty[G.diff].code}-${G.seed}`;
 
-// ---- Rendering size / quality --------------------------------------------------
-let pixelRatio = 1;
-function applyQuality() {
-  const dpr = window.devicePixelRatio || 1;
-  const R = CONFIG.render.maxPixelRatio;
-  pixelRatio = settings.quality === 'low' ? Math.min(dpr, R.low)
-    : settings.quality === 'high' ? Math.min(dpr, R.high) : Math.min(dpr, 1.5);
-  renderer.setPixelRatio(pixelRatio);
-  resize();
-}
+// ---- Rendering size: PS1-style low internal resolution ----------------------
+// The scene renders at ~240 lines and the canvas is stretched with hard pixels
+// (CSS image-rendering: pixelated). It's also why this runs fast on phones.
+let renderW = 320, renderH = 240;
+function applyQuality() { resize(); }
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
-  renderer.setSize(w, h);
+  const lines = CONFIG.render.lines[settings.quality];
+  if (lines) {
+    renderH = Math.round(Math.min(lines, h));
+    renderW = Math.round(w * renderH / h);
+  } else {
+    const pr = Math.min(window.devicePixelRatio || 1, 1.5);
+    renderW = Math.round(w * pr); renderH = Math.round(h * pr);
+  }
+  renderer.setPixelRatio(1);
+  renderer.setSize(renderW, renderH, false);
+  setPsxResolution(renderW, renderH, !!lines);
+  document.body.classList.toggle('no-retro', !lines);
+  document.body.classList.toggle('hb-left', settings.handbrakeSide === 'left');
   if (G.world) G.world.resize(w, h);
 }
 window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', () => setTimeout(resize, 200));
 if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
-
-// Auto quality: lower resolution if the phone can't hold ~50 fps.
-const perf = { t: 0, frames: 0 };
-function autoQuality(dt) {
-  if (settings.quality !== 'auto' || G.mode !== 'racing' || G.paused) { perf.t = 0; perf.frames = 0; return; }
-  perf.t += dt; perf.frames++;
-  if (perf.t < 2.5) return;
-  const fps = perf.frames / perf.t;
-  perf.t = 0; perf.frames = 0;
-  if (fps < 48) {
-    const steps = CONFIG.render.autoPixelRatio.filter((r) => r < pixelRatio - 0.01);
-    if (steps.length) { pixelRatio = steps[steps.length - 1]; renderer.setPixelRatio(pixelRatio); resize(); }
-  }
-}
 
 // ---- Page hygiene: no scrolling, zooming, pull-to-refresh -------------------------
 document.addEventListener('touchmove', (e) => { if (!e.target.closest('.scroll')) e.preventDefault(); }, { passive: false });
@@ -166,6 +164,8 @@ function startRace(seed, diff) {
 
 function beginCountdown() {
   Object.assign(G, { raceTime: 0, penalties: 0, penaltyCount: 0, splits: [], cpNext: 0, offroad: 0, wrongWay: 0, acc: 0, finishTimer: 0, paused: false });
+  G.drift = newDrift();
+  ui.drift(0, 1, null, 0);
   G.mode = 'countdown';
   G.countdown = CONFIG.rules.countdown + 0.6;
   G.shownCount = 0;
@@ -187,6 +187,7 @@ function resetToCheckpoint(reason) {
   const pen = CONFIG.rules.offroadPenalty;
   G.raceTime += pen; G.penalties += pen; G.penaltyCount++;
   G.offroad = 0; G.wrongWay = 0;
+  G.drift.combo = 0; G.drift.dur = 0;
   G.caller.reset(idx * st.ds);
   ui.clearNote(); ui.warn(null);
   ui.center(`+${pen}s`, 1.6);
@@ -229,6 +230,7 @@ function showResults() {
   });
   rows.push({ label: 'Finish', time: formatTime(time), delta: prev ? formatDelta(time - prev.time) : '', cls: prev ? (time <= prev.time ? 'good' : 'bad') : '' });
   if (prev) rows.push({ label: 'Previous best', time: formatTime(prev.time), delta: CONFIG.cars[prev.car] ? prev.car.toUpperCase() : '' });
+  if (G.drift.total > 0) rows.push({ label: 'Drift points', time: String(Math.round(G.drift.total)), delta: '', cls: 'drift' });
   if (G.penaltyCount) rows.push({ label: `Penalties (${G.penaltyCount})`, time: `+${G.penalties.toFixed(0)}s`, delta: '', cls: 'bad' });
   const km = (st.finishIndex - st.startLineIndex) * st.ds / 1000;
   const avg = km / Math.max(1, time - G.penalties) * 3600;
@@ -278,6 +280,7 @@ function physicsStep(h, inp) {
   car.step(h, ctrl, st, G.collision);
   if (G.mode !== 'racing') return;
   G.raceTime += h;
+  scoreDrift(h, car);
 
   const i = car.hint;
   const cps = st.checkpoints;
@@ -296,6 +299,30 @@ function physicsStep(h, inp) {
   if (G.wrongWay > 7) resetToCheckpoint('Wrong way');
 }
 
+// Drift scoring: points for speed x angle while sliding; a combo multiplier
+// grows the longer you hold it; hitting something loses the combo.
+function scoreDrift(h, car) {
+  const D = CONFIG.drift, d = G.drift, fx = car.fx;
+  if (fx.impact > D.crashImpact && d.combo > 0) {
+    d.combo = 0; d.dur = 0; d.state = 'lost'; d.show = 1.2;
+    return;
+  }
+  const sliding = car.speed > D.minSpeed && car.u > 0 && Math.abs(fx.beta) > D.minAngle;
+  if (sliding) {
+    d.combo += car.speed * Math.abs(fx.beta) * D.pointsRate * h;
+    d.dur += h; d.grace = 0; d.state = 'live';
+  } else if (d.combo > 0) {
+    d.grace += h;
+    if (d.grace > D.bankDelay) {
+      d.shown = d.combo * driftMult(d);
+      d.total += d.shown;
+      d.combo = 0; d.dur = 0; d.state = 'banked'; d.show = 1.4;
+      audio.beep(1760, 0.08);
+    }
+  }
+}
+const driftMult = (d) => Math.min(5, 1 + Math.floor(d.dur / 1.5));
+
 // =============================================================================
 //  Frame loop
 // =============================================================================
@@ -312,8 +339,8 @@ function frame(now) {
     const o = tryInput.update(dt);
     const pct = (v) => `${Math.round(v * 100)}%`;
     const txt = tryInput.pointer
-      ? `Throttle ${pct(o.throttle)} · Brake ${pct(o.brake)} · Steer ${o.steer < 0 ? 'L' : 'R'} ${pct(Math.abs(o.steer))}${o.handbrake ? ' · HANDBRAKE' : ''}${o.emergency ? ' · E-BRAKE' : ''}`
-      : (o.handbrake || o.emergency ? (o.emergency ? 'EMERGENCY BRAKE' : 'HANDBRAKE') : 'touch & drag');
+      ? `THR ${pct(o.throttle)} · BRK ${pct(o.brake)} · STEER ${o.steer < 0 ? 'L' : 'R'} ${pct(Math.abs(o.steer))}`
+      : 'touch & drag';
     const el = $('#try-readout'); if (el.textContent !== txt) el.textContent = txt;
     tryInput.draw();
   } else if (tryInput.enabled) { tryInput.enabled = false; tryInput.release(); }
@@ -359,13 +386,20 @@ function frame(now) {
   if (G.mode === 'racing') {
     const note = G.caller.update(car.proj.s, car.speed);
     if (note) { ui.showNote(note); speak(note.say); }
+    const d = G.drift;
+    if (d.state === 'live' && d.combo > 0) ui.drift(d.combo, driftMult(d), 'live', d.total);
+    else if (d.state === 'banked' || d.state === 'lost') {
+      d.show -= dt;
+      ui.drift(d.shown, 1, d.show > 0 ? d.state : null, d.total);
+      if (d.show <= 0) d.state = null;
+    } else ui.drift(0, 1, null, d.total);
     if (G.offroad > 0.7) ui.warn(`Get back on the road!  ${Math.ceil(CONFIG.rules.offroadMaxTime - G.offroad)}`);
     else if (G.wrongWay > 1.5) ui.warn('Wrong way!');
     else ui.warn(null);
   }
 
   world.update(dt, car);
-  G.effects.update(dt, car, world.camera, window.innerHeight * pixelRatio);
+  G.effects.update(dt, car, world.camera, renderH);
   audio.update(car, G.mode !== 'results');
 
   if (G.mode !== 'results') {
@@ -381,7 +415,6 @@ function frame(now) {
   }
   world.render();
   input.draw();
-  autoQuality(dt);
 }
 
 // =============================================================================
@@ -464,6 +497,7 @@ function loadSettingsUI() {
   $('#s-sound').checked = settings.sound;
   $('#s-fs').checked = settings.fullscreen;
   $('#s-quality').value = settings.quality;
+  $('#s-hbside').value = settings.handbrakeSide;
   $('#s-units').value = settings.units;
 }
 function applySettings() {
@@ -484,6 +518,7 @@ bindSetting('#s-sound', 'sound', Boolean);
 bindSetting('#s-fs', 'fullscreen', Boolean);
 bindSetting('#s-quality', 'quality', String, applyQuality);
 bindSetting('#s-units', 'units', String);
+bindSetting('#s-hbside', 'handbrakeSide', String, resize);
 $('#btn-settings-done').addEventListener('click', () => ui.back());
 
 // =============================================================================

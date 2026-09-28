@@ -117,7 +117,7 @@ export class Car {
 
   /**
    * Advance the simulation by dt.
-   * input: { throttle 0..1, brake 0..1, steer -1..1 (+ = right), handbrake bool, emergency bool,
+   * input: { throttle 0..1, brake 0..1, steer -1..1 (+ = right), handbrake bool,
    *          hold bool (never engage reverse — used on the start line / after the finish) }
    */
   step(dt, input, stage, world) {
@@ -200,6 +200,8 @@ export class Car {
     let torque = torqueAt(p.torqueCurve, Math.min(rpm, p.redline)) * drive;
     if (rpm >= p.redline) torque = 0;                      // rev limiter
     if (this.shiftTimer > 0) torque *= 0.15;               // torque cut during shift
+    const arc = p.arcade && p.arcade.enabled ? p.arcade : null;
+    if (arc && !this.reverse && this.gear <= 2) torque *= arc.launchBoost;
     if (!this.reverse && u > p.topSpeed) torque = 0;       // top speed limiter
     if (this.reverse && -u > p.reverseMaxSpeed) torque = 0;
     let driveForce = torque * ratio * p.drivetrainEff / p.wheelRadius * (this.reverse ? -1 : 1);
@@ -216,8 +218,11 @@ export class Car {
 
     // ---- Longitudinal demands per axle -------------------------------------------
     const frontShare = p.frontDriveShare;
-    const brakeTotal = p.brakeForce * brake * (input.emergency ? p.emergencyBrakeBoost : 1);
+    const brakeTotal = p.brakeForce * brake;
     const handbrake = !!input.handbrake;
+    // Arcade: are we drifting? (body slip beyond a threshold at speed)
+    // (hysteresis: once drifting, stay drifting down to a smaller angle)
+    const drifting = !!arc && speed > 6 && u > 0 && Math.abs(beta) > arc.driftAngle * (this.fx.drifting ? 0.55 : 1);
 
     // Contact-patch velocities in each wheel's own frame
     const cd = Math.cos(delta), sd = Math.sin(delta);
@@ -243,7 +248,14 @@ export class Car {
     const capR = p.tyreMu * sr.grip * Fzr;
     let FxR, FyR, rearSlipping = false;
     const slipR = Math.atan2(vrwy, Math.max(Math.abs(vrwx), p.minSlipSpeed));
-    if (handbrake) {
+    if (handbrake && arc) {
+      // Arcade handbrake: the rear loses most of its side grip and drags a
+      // little, but the car keeps its momentum (and RWD keeps some drive).
+      FxR = -Math.sign(vrwx) * capR * arc.handbrakeDrag * Math.min(1, Math.abs(vrwx))
+        + driveForce * (1 - frontShare) * 0.5 + rollFn(Fzr, sr, vrwx);
+      FyR = -capR * arc.handbrakeGrip * pacejka(slipR, p.rear.B * sr.bScale, p.rear.C * sr.cScale, p.rear.E);
+      rearSlipping = Math.abs(vrwy) > 1;
+    } else if (handbrake) {
       // Locked rear wheels: pure sliding friction opposing the contact velocity.
       const vr = Math.hypot(vrwx, vrwy);
       const f = capR * p.handbrakeSlide / Math.max(vr, 0.5);
@@ -254,14 +266,22 @@ export class Car {
         + brakeFn(1 - p.brakeBias, vrwx) + rollFn(Fzr, sr, vrwx);
       if (Math.abs(FxR) > capR) { FxR = Math.sign(FxR) * capR * p.spinGrip; rearSlipping = true; }
       FyR = -capR * pacejka(slipR, p.rear.B * sr.bScale, p.rear.C * sr.cScale, p.rear.E);
+      // Arcade: once sliding on throttle, the rear stays loose so drifts hold
+      if (drifting && drive > 0.3) FyR *= arc.driftGrip;
       const latR = Math.sqrt(Math.max(0, capR * capR - FxR * FxR));
       FyR = clamp(FyR, -latR, latR);
     }
 
     // ---- Sum forces in the car frame ------------------------------------------------
     const Fdrag = p.dragCoef * speed;
-    const Fx = FxF * cd - FyF * sd + FxR - Fdrag * u;
-    const Fy = FxF * sd + FyF * cd + FyR - Fdrag * v;
+    let Fx = FxF * cd - FyF * sd + FxR - Fdrag * u;
+    let Fy = FxF * sd + FyF * cd + FyR - Fdrag * v;
+    // Arcade: a push along the direction of travel while drifting on the
+    // throttle, so sliding doesn't scrub all your speed away.
+    if (drifting && drive > 0.2 && !this.reverse) {
+      const k = arc.driftBoost * drive / Math.max(speed, 1);
+      Fx += u * k; Fy += v * k;
+    }
     const torqueZ = a * (FxF * sd + FyF * cd) - b * FyR;
 
     const axc = Fx / m, ayc = Fy / m;
@@ -272,6 +292,22 @@ export class Car {
     this.vx += (axc * ch - ayc * sh) * dt;
     this.vy += (axc * sh + ayc * ch) * dt;
     this.w += (torqueZ / this.inertia - p.angularDamping * this.w) * dt;
+
+    if (arc) {
+      if (drifting) {
+        // Steering sets the drift angle you want: full lock = maxDriftAngle
+        // (steer right -> nose points right of travel -> beta negative).
+        const targetBeta = -clamp(input.steer, -1, 1) * arc.maxDriftAngle * 0.85;
+        this.w += (beta - targetBeta) * arc.driftSteerYaw * dt;
+        // ...but the car never rotates past maxDriftAngle into a spin.
+        const over = beta - clamp(beta, -arc.maxDriftAngle, arc.maxDriftAngle);
+        this.w += over * arc.antiSpin * dt;
+      } else if (!handbrake && speed > 3 && Math.abs(beta) < arc.driftAngle * 0.7) {
+        // Gripping: pull yaw toward what the front wheels ask for (planted, responsive).
+        const wGeo = u * Math.tan(delta) / this.L;
+        this.w -= (this.w - wGeo) * Math.min(1, arc.straightDamping * dt);
+      }
+    }
 
     // Low-speed blend toward a kinematic model: tyre maths is ill-conditioned
     // near standstill, so we gently steer yaw toward what the wheels dictate.
@@ -304,6 +340,8 @@ export class Car {
     fx.spinning = rearSlipping && !handbrake && Math.abs(driveForce) > 0;
     fx.locked = (frontSlipping && brake > 0.2) || handbrake;
     fx.handbrake = handbrake;
+    fx.drifting = drifting;
+    fx.beta = beta;
     fx.wheelOmega = (fx.spinning ? Math.abs(u) + 8 : u) / p.wheelRadius;
     this.rpmShown = lerp(this.rpmShown, fx.spinning ? Math.min(p.redline, rpm + 1800) : rpm, Math.min(1, dt * 12));
     this.throttleShown = drive;
@@ -343,16 +381,19 @@ export class Car {
           const vn = vpx * nx + vpy * ny;
           if (vn >= 0) return;
           const rn = rx * ny - ry * nx;
-          const jn = -(1 + o.e) * vn / (1 / m + rn * rn / I);
+          // Arcade walls: less bounce and little friction so you slide along them
+          const arcadeWalls = !!(p.arcade && p.arcade.enabled);
+          const e = arcadeWalls ? o.e * 0.5 : o.e, mu = arcadeWalls ? o.mu * 0.35 : o.mu;
+          const jn = -(1 + e) * vn / (1 / m + rn * rn / I);
           // Tangential (friction) impulse, capped by Coulomb friction
           const tx = -ny, ty = nx;
           const vt = vpx * tx + vpy * ty;
           const rt = rx * ty - ry * tx;
           let jt = -vt / (1 / m + rt * rt / I);
-          jt = clamp(jt, -o.mu * jn, o.mu * jn);
+          jt = clamp(jt, -mu * jn, mu * jn);
           this.vx += (jn * nx + jt * tx) / m;
           this.vy += (jn * ny + jt * ty) / m;
-          this.w += (rn * jn + rt * jt) / I * 0.6;   // damped spin: bumps shouldn't feel random
+          this.w += (rn * jn + rt * jt) / I * (arcadeWalls ? 0.3 : 0.6);   // damped spin: bumps shouldn't feel random
           this.w = clamp(this.w, -3.5, 3.5);
           if (-vn > this.fx.impact) { this.fx.impact = -vn; this.fx.impactKind = o.kind; }
         });

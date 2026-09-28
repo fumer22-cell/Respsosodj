@@ -30,15 +30,15 @@ export const CONFIG = {
 
     // Steering: max wheel angle shrinks with speed so high-speed input is calm.
     maxSteerLow: 0.62,     // rad at standstill
-    maxSteerHigh: 0.18,    // rad at `steerFadeSpeed` and above
-    steerFadeSpeed: 38,    // m/s
-    countersteerAssist: 0.7, // 0 = none, 1 = wheels follow the slide direction fully
+    maxSteerHigh: 0.26,    // rad at `steerFadeSpeed` and above
+    steerFadeSpeed: 40,    // m/s
+    countersteerAssist: 0.85, // 0 = none, 1 = wheels follow the slide direction fully
 
     // Tyres — simplified Pacejka "magic formula" (normalised, peak = 1):
     //   F = mu * Fz * sin(C * atan(B*a - E*(B*a - atan(B*a))))
     // B = stiffness (higher -> sharper, earlier peak), C = shape (higher ->
     // more grip loss once sliding), E = curvature near the peak.
-    tyreMu: 1.08,          // peak friction coefficient on tarmac
+    tyreMu: 1.3,           // peak friction coefficient on tarmac (arcade-high)
     front: { B: 9.5, C: 1.42, E: 0.2 },
     rear:  { B: 10.5, C: 1.38, E: 0.2 },
     spinGrip: 0.82,        // longitudinal grip left when wheels spin / lock
@@ -57,8 +57,8 @@ export const CONFIG = {
     drivetrainEff: 0.85,
     shiftUpRpm: 7100,
     shiftDownRpm: 3300,
-    shiftTime: 0.16,       // s of torque cut while changing gear
-    topSpeed: 52,          // m/s hard limit (~187 km/h)
+    shiftTime: 0.1,        // s of torque cut while changing gear
+    topSpeed: 58,          // m/s hard limit (~209 km/h)
     engineBrake: 1500,     // N at redline when coasting (scales with rpm)
 
     // Creep: the car always idles forward slightly, like an automatic.
@@ -68,8 +68,7 @@ export const CONFIG = {
     // Brakes
     brakeForce: 14500,     // N total at full pedal
     brakeBias: 0.64,       // share on front axle
-    emergencyBrakeBoost: 1.25, // multiplier during "hard flick" emergency stop
-    handbrakeSlide: 0.78,  // rear friction (fraction of mu) while locked
+    handbrakeSlide: 0.78,  // (unused in arcade mode) rear friction while fully locked
     reverseDelay: 0.35,    // s holding brake at standstill before reverse engages
     reverseMaxSpeed: 9,    // m/s
 
@@ -79,6 +78,24 @@ export const CONFIG = {
     angularDamping: 0.4,   // small extra yaw damping (1/s)
     weightTransferLag: 0.08, // s smoothing on longitudinal accel used for load transfer
 
+    // ---- Arcade layer ------------------------------------------------------
+    // Assists on top of the tyre model that make drifting easy to start,
+    // hold and steer, without spinning out. Set arcade.enabled=false for the
+    // plain simulation.
+    arcade: {
+      enabled: true,
+      handbrakeGrip: 0.32,    // rear lateral grip while the handbrake is held (not a full lock)
+      handbrakeDrag: 0.18,    // rear braking (fraction of grip) while the handbrake is held
+      driftGrip: 0.62,        // rear lateral grip once sliding with throttle (keeps drifts going)
+      driftAngle: 0.18,       // rad of body slip that counts as "drifting"
+      driftBoost: 2600,       // N of push along the direction of travel while drifting on throttle
+      driftSteerYaw: 3.0,     // 1/s^2: how strongly the car turns toward the drift angle your steering asks for
+      maxDriftAngle: 0.95,    // rad; beyond this the car is pulled back so it doesn't spin
+      antiSpin: 7,            // strength of that pull (1/s)
+      straightDamping: 2.2,   // extra yaw damping when not drifting (stable at speed)
+      launchBoost: 1.35,      // torque multiplier in 1st/2nd gear for punchy launches
+    },
+
     // Collision shape: two circles along the car's centreline
     colliderOffset: 1.15,
     colliderRadius: 0.95,
@@ -87,17 +104,19 @@ export const CONFIG = {
   cars: {
     rwd: {
       name: 'RWD "Kestrel"',
-      blurb: 'Rear-drive. Tail-happy, easy to drift, rewards throttle control.',
+      blurb: 'Rear-drive coupe. Tail-happy, drifts on command, rewards throttle control.',
       drive: 'rwd',
       frontDriveShare: 0,
-      color: 0xd8342c, accent: 0xf5f5f5,
+      model: 'coupe',
+      color: 0xf2f2ee, accent: 0x151518, underglow: 0xff2bd6, rim: 0x9aa0a8,
     },
     awd: {
-      name: 'AWD "Tundra"',
-      blurb: 'All-wheel drive. Grippy and stable, great traction on loose stuff.',
+      name: 'AWD "Raijin"',
+      blurb: 'Turbo AWD sedan. Planted and fast out of corners, great on loose stuff.',
       drive: 'awd',
       frontDriveShare: 0.42,
-      color: 0x2a62d8, accent: 0xffd23a,
+      model: 'sedan',
+      color: 0x1d4fd0, accent: 0xffd23a, underglow: 0x19e6ff, rim: 0xe0b020,
       // per-car overrides of carBase
       overrides: { mass: 1320, torqueCurve: [[900, 180], [2000, 250], [3000, 290], [4000, 320],
         [5000, 330], [6000, 315], [7000, 280], [7600, 250]] },
@@ -111,40 +130,37 @@ export const CONFIG = {
   // ---------------------------------------------------------------------------
   surfaces: {
     tarmac: { grip: 1.0,  bScale: 1.0,  cScale: 1.0,  rolling: 1.0, color: 0x4a4c50, dust: null,     mark: [0.08, 0.08, 0.08, 0.55], label: 'tarmac' },
-    gravel: { grip: 0.72, bScale: 0.72, cScale: 0.9,  rolling: 1.8, color: 0x9a8a72, dust: 0xc8b79a,  mark: [0.42, 0.36, 0.28, 0.45], label: 'gravel' },
-    dirt:   { grip: 0.78, bScale: 0.78, cScale: 0.92, rolling: 1.6, color: 0x8a6444, dust: 0xa88a66,  mark: [0.32, 0.22, 0.14, 0.45], label: 'dirt' },
-    mud:    { grip: 0.55, bScale: 0.65, cScale: 0.9,  rolling: 4.0, color: 0x5a4030, dust: 0x7a5a40,  mark: [0.20, 0.13, 0.08, 0.6],  label: 'mud', heavy: true },
-    snow:   { grip: 0.45, bScale: 0.7,  cScale: 0.9,  rolling: 2.2, color: 0xe4e9ef, dust: 0xf4f8ff,  mark: [0.62, 0.66, 0.72, 0.5],  label: 'snow' },
-    verge:  { grip: 0.6,  bScale: 0.7,  cScale: 0.9,  rolling: 2.5, color: 0x6e6040, dust: 0x8a7a5a,  mark: [0.25, 0.2, 0.12, 0.4],   label: 'verge' },
-    grass:  { grip: 0.5,  bScale: 0.65, cScale: 0.9,  rolling: 3.5, color: 0x4f7a3a, dust: 0x6a5a3a,  mark: [0.2, 0.25, 0.12, 0.4],   label: 'grass' },
+    gravel: { grip: 0.8,  bScale: 0.72, cScale: 0.9,  rolling: 1.8, color: 0x9a8a72, dust: 0xc8b79a,  mark: [0.42, 0.36, 0.28, 0.45], label: 'gravel' },
+    dirt:   { grip: 0.84, bScale: 0.78, cScale: 0.92, rolling: 1.6, color: 0x8a6444, dust: 0xa88a66,  mark: [0.32, 0.22, 0.14, 0.45], label: 'dirt' },
+    mud:    { grip: 0.62, bScale: 0.65, cScale: 0.9,  rolling: 4.0, color: 0x5a4030, dust: 0x7a5a40,  mark: [0.20, 0.13, 0.08, 0.6],  label: 'mud', heavy: true },
+    snow:   { grip: 0.55, bScale: 0.7,  cScale: 0.9,  rolling: 2.2, color: 0xe4e9ef, dust: 0xf4f8ff,  mark: [0.62, 0.66, 0.72, 0.5],  label: 'snow' },
+    verge:  { grip: 0.7,  bScale: 0.7,  cScale: 0.9,  rolling: 2.5, color: 0x6e6040, dust: 0x8a7a5a,  mark: [0.25, 0.2, 0.12, 0.4],   label: 'verge' },
+    grass:  { grip: 0.6,  bScale: 0.65, cScale: 0.9,  rolling: 3.5, color: 0x4f7a3a, dust: 0x6a5a3a,  mark: [0.2, 0.25, 0.12, 0.4],   label: 'grass' },
   },
 
   // ---------------------------------------------------------------------------
   // "Invisible string" touch controls
   // ---------------------------------------------------------------------------
   controls: {
-    // Drag distance (as a fraction of the screen's shorter side) that gives
-    // full throttle / brake / lock. Divided by the sensitivity setting.
-    fullDrag: 0.26,
-    steerFullDrag: 0.24,
+    // Touch anywhere = full throttle straight away. From that anchor:
+    //   pull back a little -> throttle eases off and light braking starts
+    //   pull back hard     -> hard braking (and reverse when stopped)
+    //   drag sideways      -> steering
+    // Distances are fractions of the screen's shorter side, divided by the
+    // sensitivity setting.
+    fullDrag: 0.26,        // pull-back distance for full brake
+    steerFullDrag: 0.22,   // sideways distance for full lock
     deadZone: 0.06,        // default dead zone (fraction of fullDrag), user adjustable
-    steerCurve: 1.35,      // >1 = finer control near centre
-    // String "tension" — steering follows the finger through a spring-damper
-    steerSpring: 90,       // stiffness
-    steerDamping: 17,      // damping (≈ 2*sqrt(spring) is critically damped)
-    returnSpring: 30,      // spring back to centre when the finger lifts
-    pedalRise: 7,          // 1/s throttle/brake smoothing toward target
-    // Gestures (speeds in screen-short-sides per second)
-    flickSpeed: 3.2,       // finger speed that counts as a flick
-    flickWindow: 0.07,     // s over which finger speed is measured
-    flickMaxTap: 0.28,     // touch shorter than this that ends fast = flick
-    flickCooldown: 0.35,
-    handbrakeTap: 0.4,     // s of handbrake from a flick
-    emergencyTime: 0.75,   // s of emergency braking from a downward flick
-    downFlickCone: 0.8,    // |dx|/dy below this = "downward" flick
-    spinTurns: 0.85,       // accumulated finger rotation (turns) that = spin
-    spinWindow: 0.6,       // s the rotation is measured over
-    spinHold: 0.25,        // s handbrake stays on after the spin stops
+    throttleCut: 0.32,     // pull-back (fraction of fullDrag, past the dead zone) where throttle reaches 0
+    brakeStart: 0.04,      // pull-back where braking begins
+    brakeCurve: 1.3,       // >1 = gentler light braking, sharper at the end
+    steerCurve: 1.3,       // >1 = finer control near centre
+    // String "tension": steering follows the finger through a spring-damper
+    steerSpring: 110,      // stiffness
+    steerDamping: 19,      // damping (about 2*sqrt(spring) is critically damped)
+    returnSpring: 34,      // spring back to centre when the finger lifts
+    throttleRise: 14,      // 1/s: how fast throttle comes in (fast = "mass acceleration")
+    pedalRise: 9,          // 1/s: brake / throttle-lift smoothing
   },
 
   // Defaults for the settings screen (persisted in localStorage)
@@ -154,7 +170,8 @@ export const CONFIG = {
     invertSteer: false,
     voice: true,
     sound: true,
-    quality: 'auto',       // auto | low | high
+    quality: 'psx',        // chunky (180p) | psx (240p) | sharp (360p) | native
+    handbrakeSide: 'right',
     units: 'kmh',
     fullscreen: true,
   },
@@ -176,7 +193,7 @@ export const CONFIG = {
     fovPortrait: 76,
     portraitDistanceScale: 1.18,
     speedFov: 10,          // extra fov at top speed
-    far: 420,
+    far: 300,
   },
 
   // ---------------------------------------------------------------------------
@@ -192,14 +209,16 @@ export const CONFIG = {
     checkpointCount: [4, 6],
     sectionLength: [260, 620], // surface section length
     mudPatch: [30, 80],
+    // time: 'night' | 'dusk' selects the sky / lighting (see render.skies).
+    // lamps: chance per 50 m of a street lamp. guardrail: chance a corner gets rails.
     themes: [
-      { name: 'Forest gravel', weight: 3, ground: 0x4c7236, main: ['gravel', 'gravel', 'dirt'], patch: 'mud' },
-      { name: 'Mixed asphalt', weight: 2, ground: 0x5b7f3c, main: ['tarmac', 'tarmac', 'gravel'], patch: 'dirt' },
-      { name: 'Muddy hills',   weight: 2, lengthScale: 0.95, ground: 0x587033, main: ['dirt', 'dirt', 'gravel'], patch: 'mud' },
-      { name: 'Winter',        weight: 2, lengthScale: 0.82, ground: 0xdfe6ee, main: ['snow', 'snow', 'gravel'], patch: 'snow', snowy: true },
+      { name: 'Midnight touge', weight: 4, time: 'night', ground: 0x24331f, main: ['tarmac', 'tarmac', 'tarmac'], patch: 'gravel', lamps: 0.75, guardrail: 0.85 },
+      { name: 'Dusk pass',      weight: 2, time: 'dusk',  ground: 0x3d4a26, main: ['tarmac', 'tarmac', 'gravel'], patch: 'dirt', lamps: 0.3, guardrail: 0.7 },
+      { name: 'Forest gravel',  weight: 1, time: 'dusk',  ground: 0x35502a, main: ['gravel', 'gravel', 'dirt'], patch: 'mud', lamps: 0.1, guardrail: 0.35 },
+      { name: 'Snow pass',      weight: 1, time: 'night', lengthScale: 0.88, ground: 0xc6d0dc, main: ['snow', 'tarmac', 'snow'], patch: 'snow', snowy: true, lamps: 0.6, guardrail: 0.7 },
     ],
     // Hazard base densities (chance per 4 m per side)
-    treeDensity: 0.34,
+    treeDensity: 0.28,
     rockDensity: 0.05,
     backdropTrees: 0.9,
   },
@@ -207,9 +226,9 @@ export const CONFIG = {
   // Stage length (m) is picked from `length`, then scaled by the theme's
   // lengthScale so slow surfaces (snow) still give 60–120 s of driving.
   difficulty: {
-    easy:   { label: 'Easy',   code: 'E', length: [1500, 1950], radiusScale: 1.35, hairpin: 0.05, chicane: 0.08, width: [9.0, 11.0], hazard: 0.7, hazardGap: 1.6, straight: [60, 170] },
-    normal: { label: 'Normal', code: 'N', length: [1550, 2050], radiusScale: 1.0,  hairpin: 0.10, chicane: 0.12, width: [7.8, 9.8],  hazard: 1.0, hazardGap: 1.0, straight: [40, 140] },
-    hard:   { label: 'Hard',   code: 'H', length: [1600, 2100], radiusScale: 0.8,  hairpin: 0.16, chicane: 0.16, width: [6.8, 8.6],  hazard: 1.45, hazardGap: 0.7, straight: [30, 110] },
+    easy:   { label: 'Easy',   code: 'E', length: [1700, 2200], radiusScale: 1.35, hairpin: 0.05, chicane: 0.08, width: [9.0, 11.0], hazard: 0.7, hazardGap: 1.6, straight: [60, 170] },
+    normal: { label: 'Normal', code: 'N', length: [1800, 2350], radiusScale: 1.0,  hairpin: 0.10, chicane: 0.12, width: [7.8, 9.8],  hazard: 1.0, hazardGap: 1.0, straight: [40, 140] },
+    hard:   { label: 'Hard',   code: 'H', length: [1750, 2250], radiusScale: 0.8,  hairpin: 0.16, chicane: 0.16, width: [6.8, 8.6],  hazard: 1.45, hazardGap: 0.7, straight: [30, 110] },
   },
 
   // ---------------------------------------------------------------------------
@@ -236,14 +255,31 @@ export const CONFIG = {
     callMaxDistance: 150,
   },
 
-  // Rendering / effects
+  // Rendering / effects — PS1-style: low internal resolution (upscaled with
+  // hard pixels), vertex snapping ("wobble"), affine texture warping,
+  // 15-bit colour with ordered dithering, tiny nearest-filtered textures.
   render: {
-    maxPixelRatio: { low: 1.0, high: 2.0 },
-    autoPixelRatio: [0.75, 1.0, 1.25, 1.5, 1.75],
-    fogNear: 90, fogFar: 330,
-    particles: 700,
+    lines: { chunky: 180, psx: 240, sharp: 360 },   // internal vertical resolution
+    snapDivisor: 2,        // vertices snap to a grid of (resolution / this); higher = more wobble
+    colorLevels: 31,       // 5 bits per channel
+    affine: true,          // PS1 texture warping
+    particles: 600,
     tireMarkSegments: 1800,
-    chunkSize: 140,
+    chunkSize: 160,
+    skies: {
+      night: { top: 0x04050c, horizon: 0x33204f, fog: 0x1a1430, fogNear: 25, fogFar: 175, ambient: 0.42, hemi: [0x8fa0ff, 0x1a1a24, 0.9], sun: [0x9fb4ff, 0.35], stars: true, city: true },
+      dusk:  { top: 0x1d2350, horizon: 0xff8a4a, fog: 0x7a5068, fogNear: 45, fogFar: 230, ambient: 0.78, hemi: [0xffc8a0, 0x303040, 1.2], sun: [0xffb070, 1.0], stars: false, city: true },
+    },
+    lampColor: 0xffb048,   // sodium street lights
+  },
+
+  // Drift scoring (arcade)
+  drift: {
+    minSpeed: 9,           // m/s
+    minAngle: 0.22,        // rad of body slip
+    pointsRate: 12,        // points per (m/s * rad) per second
+    bankDelay: 0.8,        // s of grip before a drift combo is banked
+    crashImpact: 4,        // m/s impact that wipes the current combo
   },
 };
 
