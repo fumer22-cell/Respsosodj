@@ -1,0 +1,11 @@
+{
+  "name": "string-rally",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mobile rally driving game with 'invisible string' touch controls (Three.js).",
+  "type": "module",
+  "scripts": {
+    "start": "npx --yes http-server -c-1 -p 8080 .",
+    "check": "node tools/check-stages.mjs && node tools/check-physics.mjs"
+  }
+}

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#11161d">
+  <title>String Rally</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  </script>
+</head>
+<body>
+  <!-- 3D view + the string overlay. #touch receives all driving touches. -->
+  <canvas id="gl"></canvas>
+  <canvas id="string"></canvas>
+  <div id="touch"></div>
+
+  <!-- ===================== HUD ===================== -->
+  <div id="hud" class="hidden">
+    <div class="hud-tl">
+      <div id="hud-time" class="hud-time">0:00.00</div>
+      <div id="hud-split" class="hud-split"></div>
+      <div id="hud-cp" class="hud-cp"></div>
+    </div>
+    <div id="hud-note" class="hud-note hidden">
+      <div class="note-main"><span id="note-arrow" class="note-arrow"></span><span id="note-grade" class="note-grade"></span></div>
+      <div id="note-text" class="note-text"></div>
+    </div>
+    <div class="hud-tr">
+      <button id="btn-pause" class="icon-btn" aria-label="Pause">❚❚</button>
+      <div id="hud-seed" class="hud-seed"></div>
+    </div>
+    <div class="hud-bl">
+      <div class="speedo"><span id="hud-speed">0</span><small id="hud-unit">km/h</small></div>
+      <div class="gearline"><span id="hud-gear" class="gear">1</span><div class="rpm"><div id="hud-rpm"></div></div></div>
+    </div>
+    <div id="hud-center" class="hud-center"></div>
+    <div id="hud-warn" class="hud-warn hidden"></div>
+    <div id="hud-hint" class="hud-hint hidden">
+      <b>Touch anywhere &amp; hold</b> — you're holding a string tied to the car.<br>
+      Drag <b>up</b> to go · <b>down</b> to brake · <b>sideways</b> to steer<br>
+      <b>Flick</b> for handbrake · <b>sharp flick down</b> = emergency brake
+    </div>
+  </div>
+
+  <!-- ===================== SCREENS ===================== -->
+  <section id="screen-title" class="screen">
+    <div class="panel title-panel">
+      <h1 class="logo">STRING<span>RALLY</span></h1>
+      <p class="tag">Drive with an invisible string. No buttons. Just pull.</p>
+      <button class="btn primary big" data-go="car">Play</button>
+      <div class="row">
+        <button class="btn" data-go="help">How to drive</button>
+        <button class="btn" data-go="settings">Settings</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-car" class="screen hidden">
+    <div class="panel scroll">
+      <h2>Choose your car</h2>
+      <div class="cards">
+        <button class="card" data-car="rwd">
+          <div class="swatch" style="background:#d8342c"></div>
+          <h3>RWD “Kestrel”</h3>
+          <p>Rear-wheel drive. Tail-happy and playful — powers into big drifts. Rewards a light throttle.</p>
+          <div class="stats"><span>Grip ●●○○</span><span>Drift ●●●●</span><span>Traction ●●○○</span></div>
+        </button>
+        <button class="card" data-car="awd">
+          <div class="swatch" style="background:#2a62d8"></div>
+          <h3>AWD “Tundra”</h3>
+          <p>All-wheel drive. Planted, fast out of corners, forgiving on loose surfaces.</p>
+          <div class="stats"><span>Grip ●●●●</span><span>Drift ●●○○</span><span>Traction ●●●●</span></div>
+        </button>
+      </div>
+      <button class="btn ghost" data-go="title">Back</button>
+    </div>
+  </section>
+
+  <section id="screen-diff" class="screen hidden">
+    <div class="panel">
+      <h2>Difficulty</h2>
+      <div class="stack">
+        <button class="btn diff" data-diff="easy"><b>Easy</b><small>Wide roads, open corners, few hazards</small></button>
+        <button class="btn diff" data-diff="normal"><b>Normal</b><small>A proper rally stage</small></button>
+        <button class="btn diff" data-diff="hard"><b>Hard</b><small>Narrow, tight hairpins, trees everywhere</small></button>
+      </div>
+      <button class="btn ghost" data-go="car">Back</button>
+    </div>
+  </section>
+
+  <section id="screen-stage" class="screen hidden">
+    <div class="panel">
+      <h2>Stage</h2>
+      <button id="btn-random" class="btn primary big">Random stage</button>
+      <div class="or">or enter a seed</div>
+      <form id="seed-form" class="seed-row" autocomplete="off">
+        <input id="seed-input" type="text" inputmode="text" autocapitalize="characters" spellcheck="false" maxlength="18" placeholder="e.g. N-K7Q2XD">
+        <button class="btn primary" type="submit">Drive</button>
+      </form>
+      <div id="seed-best" class="small muted"></div>
+      <div id="recent" class="recent"></div>
+      <button class="btn ghost" data-go="diff">Back</button>
+    </div>
+  </section>
+
+  <section id="screen-loading" class="screen hidden">
+    <div class="panel"><h2>Building stage…</h2><p id="loading-seed" class="muted"></p></div>
+  </section>
+
+  <section id="screen-pause" class="screen hidden">
+    <div class="panel">
+      <h2>Paused</h2>
+      <button id="btn-resume" class="btn primary big">Resume</button>
+      <div class="row">
+        <button id="btn-restart" class="btn">Restart stage</button>
+        <button class="btn" data-go="settings">Settings</button>
+      </div>
+      <button id="btn-quit" class="btn ghost">Quit to menu</button>
+    </div>
+  </section>
+
+  <section id="screen-results" class="screen hidden">
+    <div class="panel scroll results">
+      <h2 id="res-title">Stage complete</h2>
+      <div id="res-record" class="record hidden">NEW STAGE RECORD</div>
+      <div id="res-time" class="res-time">0:00.00</div>
+      <div id="res-sub" class="muted small"></div>
+      <table id="res-splits" class="splits"></table>
+      <div class="seedshare">Seed <b id="res-seed"></b> <button id="btn-copy" class="btn tiny">Copy</button></div>
+      <div class="row">
+        <button id="btn-next" class="btn primary">Next stage</button>
+        <button id="btn-retry" class="btn">Retry</button>
+      </div>
+      <button id="btn-menu" class="btn ghost">Menu</button>
+    </div>
+  </section>
+
+  <section id="screen-settings" class="screen hidden">
+    <div class="panel scroll">
+      <h2>Settings</h2>
+      <label class="set">Steering / pedal sensitivity <output id="o-sens"></output>
+        <input id="s-sens" type="range" min="0.5" max="2" step="0.05"></label>
+      <label class="set">Dead zone <output id="o-dz"></output>
+        <input id="s-dz" type="range" min="0" max="0.3" step="0.01"></label>
+      <label class="set check"><input id="s-invert" type="checkbox"> Invert left / right</label>
+      <label class="set check"><input id="s-voice" type="checkbox"> Co-driver voice (speech)</label>
+      <label class="set check"><input id="s-sound" type="checkbox"> Engine sound</label>
+      <label class="set check"><input id="s-fs" type="checkbox"> Go fullscreen when racing</label>
+      <label class="set">Graphics
+        <select id="s-quality"><option value="auto">Auto</option><option value="low">Low (fastest)</option><option value="high">High</option></select></label>
+      <label class="set">Units
+        <select id="s-units"><option value="kmh">km/h</option><option value="mph">mph</option></select></label>
+      <div class="try">
+        <div class="small muted">Try the string here:</div>
+        <div id="try-pad" class="try-pad"><div id="try-readout">touch &amp; drag</div></div>
+      </div>
+      <button id="btn-settings-done" class="btn primary">Done</button>
+    </div>
+  </section>
+
+  <section id="screen-help" class="screen hidden">
+    <div class="panel scroll help">
+      <h2>How to drive</h2>
+      <p>Imagine an <b>invisible string</b> tied to the back of your car. Touch <b>anywhere</b> — that spot is where you grabbed it. Keep your finger down and pull:</p>
+      <ul>
+        <li><b>Up</b> — throttle. Further = more.</li>
+        <li><b>Down</b> — brake. Hold it at a standstill to reverse.</li>
+        <li><b>Left / right</b> — steer. Further = more lock.</li>
+        <li><b>Quick flick</b> (or spin your finger in a circle) — handbrake, to kick the car into a drift.</li>
+        <li><b>Sharp flick down</b> — emergency brake.</li>
+        <li><b>Let go</b> — coast. The car idles forward slowly.</li>
+      </ul>
+      <p>Listen to your co-driver: “<b>Left 3, long, don't cut</b>” means a medium left-hander that goes on a while with rocks on the inside. <b>1</b> is slowest, <b>6</b> is nearly flat out; <b>HP</b> is a hairpin.</p>
+      <p>Stay on the road: more than a few seconds off it and you're put back at the last checkpoint with a time penalty.</p>
+      <button class="btn primary" data-go="back">Got it</button>
+    </div>
+  </section>
+
+  <div id="boot-error" class="boot-error hidden"></div>
+
+  <script>
+    // Fallback message if the module (or Three.js from the CDN) fails to load.
+    setTimeout(function () {
+      if (!window.__rallyBooted) {
+        var el = document.getElementById('boot-error');
+        el.textContent = 'Could not start the game. It needs an internet connection to load Three.js from cdn.jsdelivr.net, and must be served over http:// (not opened as a file). See README.';
+        el.classList.remove('hidden');
+      }
+    }, 8000);
+  </script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
