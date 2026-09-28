@@ -7,7 +7,8 @@ small button of its own.
 - **Touch anywhere**: that point becomes the anchor, and you're on full throttle straight away.
 - **Pull back**: small wobbles are ignored. Pulling further back lifts off the throttle, then
   braking builds up.
-- **Pull back hard**: hard braking. Keep holding at a standstill to reverse.
+- **Pull back hard**: hard braking. Keep holding at a standstill to reverse. In reverse, steering
+  still turns the nose toward your finger, so left is always left.
 - **Left or right of the anchor**: turn left or right. The further out, the more lock. Steering is
   spring-smoothed, like tension on a string.
 - **(P) handbrake**: a small button halfway up the left edge, for your second thumb. It's the only

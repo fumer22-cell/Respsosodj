@@ -153,7 +153,12 @@ export class Car {
     }
     const assistGain = arcP && !this.driftLatch ? arcP.gripCountersteer : p.countersteerAssist;
     const assist = assistGain * clamp(beta, -0.7, 0.7);
-    const target = clamp(clamp(input.steer, -1, 1) * maxSteer + assist, -p.maxSteerLow, p.maxSteerLow);
+    // Arcade reverse: when rolling backwards, flip the wheels so the NOSE still
+    // turns the way the finger points (a real car's nose swings the other way,
+    // which made steering feel reversed whenever you pulled back into reverse).
+    const backwards = this.reverse || u < -0.5;
+    const steerIn = clamp(input.steer, -1, 1) * (backwards && arcP ? -1 : 1);
+    const target = clamp(steerIn * maxSteer + assist, -p.maxSteerLow, p.maxSteerLow);
     const rate = 5.0 * dt;                     // rad per step the wheels can turn
     this.steer += clamp(target - this.steer, -rate, rate);
     const delta = this.steer;

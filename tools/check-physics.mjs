@@ -40,6 +40,15 @@ for (const type of ['rwd', 'awd']) {
   const c3 = new Car(carParams(type));
   run(c3, flat('tarmac'), 3, () => ({ throttle: 0, brake: 0.8, steer: 0 }));
   check(`${type} reverse`, c3.reverse && c3.u < -1, `u ${c3.u.toFixed(2)}`);
+  // Steering is consistent: forwards OR reversing, steer left turns the nose left
+  for (const dir of ['forward', 'reverse']) {
+    const c = new Car(carParams(type));
+    if (dir === 'reverse') run(c, flat('tarmac'), 2.5, () => ({ throttle: 0, brake: 0.8, steer: 0 }));
+    else run(c, flat('tarmac'), 2, () => ({ throttle: 0.6, brake: 0, steer: 0 }));
+    const h0 = c.h;
+    run(c, flat('tarmac'), 1.5, () => (dir === 'reverse' ? { throttle: 0, brake: 0.8, steer: -0.8 } : { throttle: 0.6, brake: 0, steer: -0.8 }));
+    check(`${type} steer left ${dir} turns nose left`, c.h - h0 < -0.1, `heading change ${(c.h - h0).toFixed(2)} rad (u ${c.u.toFixed(1)})`);
+  }
   // Idle creep
   const c4 = new Car(carParams(type));
   run(c4, flat('tarmac'), 6, () => ({ throttle: 0, brake: 0, steer: 0 }));
